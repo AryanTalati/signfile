@@ -15,6 +15,13 @@
       "when": 1795038782807,
       "tag": "0001_security_and_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795039608592,
+      "tag": "0002_purge_company",
+      "breakpoints": true
     }
   ]
 }

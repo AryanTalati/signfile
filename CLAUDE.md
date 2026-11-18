@@ -87,6 +87,8 @@ SMS/WhatsApp, native CRM connectors, Teams/Outlook, Stripe billing, identity ver
 - Seed demo company "Astra AI" with a demo login (credentials in README).
 - `scripts/gen-test-agreements` makes varied agreements the detector was NOT designed around (DOCX with tables, PDF with drawn lines, two-column signature blocks, multi-page with initials, scanned/image-only PDF). Automated E2E test (Playwright) covers the full path on desktop + mobile viewport.
 - `.env` never committed; keep `.env.example` current.
+- E2E (`npm run test:e2e`) runs desktop + phone and must stay green. Test accounts use `@signfile-e2e.example` and are purged in global teardown, so never use that domain for anything else. Before pushing a deploy-affecting change, also run the suite against the Docker image (`E2E_BASE_URL=http://localhost:10000`).
+- Auth: `requireAuth()` / `requireAdmin()` in every page and action behind login. Tenant data access always uses `auth.company.id`, never an id from the request.
 - Small, frequent commits with clear messages.
 - Repo is **private until submission**. The README's "Submission checklist" (make repo public, last commit before the deadline, etc.) must be done on Nov 25. Remind the user.
 - README starts with "Test it in 3 minutes" + demo login. Setup steps include setting a monthly spend limit in the Anthropic console.
