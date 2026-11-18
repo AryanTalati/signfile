@@ -1,0 +1,491 @@
+[
+  {
+    "file": "docx-table-blocks.docx",
+    "format": "docx",
+    "firmName": "Astra AI",
+    "clientName": "Globex Test Industries Ltd",
+    "description": "DOCX; signature blocks are a bordered table (label cell + empty cell), no underscores; also has a fee table.",
+    "outcome": "fields",
+    "signatures": [
+      {
+        "role": "firm",
+        "page": "last"
+      },
+      {
+        "role": "client",
+        "page": "last"
+      }
+    ],
+    "traps": [
+      "Signature 'line' is a table cell border, not text or a path under a label",
+      "Fee table cells must not become fields",
+      "Labels are 'Authorised signatory' / 'Position', not 'Signature' / 'Title'"
+    ]
+  },
+  {
+    "file": "docx-dot-leaders.docx",
+    "format": "docx",
+    "firmName": "Example Consulting LLC",
+    "clientName": "Umbrella Test Holdings Inc.",
+    "description": "DOCX; UK-style 'SIGNED by ......' execution clauses with dot leaders; party named on the line AFTER the signature line.",
+    "outcome": "fields",
+    "signatures": [
+      {
+        "role": "client",
+        "page": "last"
+      },
+      {
+        "role": "firm",
+        "page": "last"
+      }
+    ],
+    "traps": [
+      "Dot leaders, not underscores",
+      "Role appears below the line ('for and on behalf of')",
+      "Witness lines are not a party signer",
+      "'electronic signature' appears in clause body text",
+      "'DATED: .....' on page 1 is not a signer field"
+    ]
+  },
+  {
+    "file": "pdf-drawn-lines.pdf",
+    "format": "pdf",
+    "firmName": "Astra AI",
+    "clientName": "Initech Test Co.",
+    "description": "Signature lines are vector paths with labels BELOW them; stacked CLIENT then firm blocks.",
+    "outcome": "fields",
+    "signatures": [
+      {
+        "role": "client",
+        "page": "last"
+      },
+      {
+        "role": "firm",
+        "page": "last"
+      }
+    ],
+    "traps": [
+      "No underscore text at all",
+      "Label is below the line, not to the left"
+    ],
+    "check": {
+      "pages": 3,
+      "textChars": 4260,
+      "rotations": [
+        0,
+        0,
+        0
+      ],
+      "sizeKb": 5
+    }
+  },
+  {
+    "file": "pdf-two-column.pdf",
+    "format": "pdf",
+    "firmName": "Northwind Example Labs",
+    "clientName": "Hooli Test Systems",
+    "description": "Two signature blocks side by side: PROVIDER (left) and CUSTOMER (right), 'By: ____' style.",
+    "outcome": "fields",
+    "signatures": [
+      {
+        "role": "firm",
+        "page": "last"
+      },
+      {
+        "role": "client",
+        "page": "last"
+      }
+    ],
+    "traps": [
+      "Firm isn't the demo company, so role must come from PROVIDER/CUSTOMER",
+      "Same row holds both parties' fields",
+      "'By:' means signature"
+    ],
+    "check": {
+      "pages": 2,
+      "textChars": 3212,
+      "rotations": [
+        0,
+        0
+      ],
+      "sizeKb": 4
+    }
+  },
+  {
+    "file": "pdf-multipage-initials.pdf",
+    "format": "pdf",
+    "firmName": "Astra AI",
+    "clientName": "Vandelay Test Imports",
+    "description": "6 pages, empty initials boxes in every page footer for both parties; signatures on the last page.",
+    "outcome": "fields",
+    "signatures": [
+      {
+        "role": "client",
+        "page": 6
+      },
+      {
+        "role": "firm",
+        "page": 6
+      }
+    ],
+    "initials": [
+      {
+        "role": "client",
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      },
+      {
+        "role": "firm",
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ]
+      }
+    ],
+    "traps": [
+      "Initials targets are drawn rectangles",
+      "Repeated footer on every page"
+    ],
+    "check": {
+      "pages": 6,
+      "textChars": 10785,
+      "rotations": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "sizeKb": 10
+    }
+  },
+  {
+    "file": "pdf-scanned.pdf",
+    "format": "pdf",
+    "firmName": "Astra AI",
+    "clientName": "Soylent Test Foods",
+    "description": "Image-only scan (skewed, noisy JPEG pages), no text layer.",
+    "outcome": "append",
+    "traps": [
+      "No text to detect from; must offer 'append a signature page', not dead-end"
+    ],
+    "check": {
+      "pages": 2,
+      "textChars": 0,
+      "rotations": [
+        0,
+        0
+      ],
+      "sizeKb": 187
+    }
+  },
+  {
+    "file": "pdf-rotated.pdf",
+    "format": "pdf",
+    "firmName": "Astra AI",
+    "clientName": "Stark Test Logistics",
+    "description": "Page 2 is a landscape page with /Rotate 90 whose content displays upright as portrait.",
+    "outcome": "fields",
+    "signatures": [
+      {
+        "role": "client",
+        "page": 2
+      },
+      {
+        "role": "firm",
+        "page": 2
+      }
+    ],
+    "traps": [
+      "Field coordinates must be in displayed space; stamping must undo the rotation"
+    ],
+    "check": {
+      "pages": 2,
+      "textChars": 1968,
+      "rotations": [
+        0,
+        90
+      ],
+      "sizeKb": 3
+    }
+  },
+  {
+    "file": "pdf-no-signature-area.pdf",
+    "format": "pdf",
+    "firmName": "Astra AI",
+    "clientName": "Wayne Test Enterprises",
+    "description": "Engagement letter with no signature lines or labels; says 'please sign' in body text.",
+    "outcome": "append",
+    "traps": [
+      "'Please sign' and 'Sincerely' must not produce fields"
+    ],
+    "check": {
+      "pages": 2,
+      "textChars": 2599,
+      "rotations": [
+        0,
+        0
+      ],
+      "sizeKb": 4
+    }
+  },
+  {
+    "file": "pdf-acroform.pdf",
+    "format": "pdf",
+    "firmName": "Example Dev Studio",
+    "clientName": "Cyberdyne Test Systems",
+    "description": "Existing AcroForm text fields (customer_signature, developer_date, ...) and a checkbox.",
+    "outcome": "fields",
+    "signatures": [
+      {
+        "role": "client",
+        "page": "last"
+      },
+      {
+        "role": "firm",
+        "page": "last"
+      }
+    ],
+    "traps": [
+      "Existing form widgets must be used or flattened, not left editable in the sealed PDF",
+      "DEVELOPER = firm, CUSTOMER = client"
+    ],
+    "check": {
+      "pages": 3,
+      "textChars": 3302,
+      "rotations": [
+        0,
+        0,
+        0
+      ],
+      "sizeKb": 8
+    }
+  },
+  {
+    "file": "pdf-large.pdf",
+    "format": "pdf",
+    "firmName": "Astra AI",
+    "clientName": "Massive Test Dynamic",
+    "description": "~150 pages, several MB (incompressible images), signatures on the last page.",
+    "outcome": "fields",
+    "signatures": [
+      {
+        "role": "client",
+        "page": "last"
+      },
+      {
+        "role": "firm",
+        "page": "last"
+      }
+    ],
+    "traps": [
+      "Upload, detection, rendering and sealing must stay fast and within memory"
+    ],
+    "check": {
+      "pages": 151,
+      "textChars": 353979,
+      "rotations": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "sizeKb": 6369
+    }
+  },
+  {
+    "file": "pdf-encrypted-password.pdf",
+    "format": "pdf",
+    "firmName": "Astra AI",
+    "clientName": "Test Client",
+    "description": "Requires a password to open (RC4 40-bit, user password 'test').",
+    "outcome": "reject",
+    "rejectCode": "encrypted",
+    "traps": [
+      "Must show a clear message, not a crash or a blank editor"
+    ]
+  },
+  {
+    "file": "pdf-encrypted-permissions.pdf",
+    "format": "pdf",
+    "firmName": "Astra AI",
+    "clientName": "Test Client",
+    "description": "Opens without a password but is encrypted with permission restrictions (owner password only).",
+    "outcome": "fields",
+    "signatures": [
+      {
+        "role": "client",
+        "page": 1
+      }
+    ],
+    "traps": [
+      "Opens fine in viewers, so rejecting it would surprise users; strip restrictions before stamping"
+    ],
+    "check": {
+      "pages": 1,
+      "textChars": 80,
+      "rotations": [
+        0
+      ],
+      "sizeKb": 1
+    }
+  }
+]

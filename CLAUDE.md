@@ -33,7 +33,7 @@ Unfamiliar PDF/DOCX → upload → fields detected or placed → send → client
 
 ## Stack
 - Next.js (App Router) + TypeScript: app, signing page, REST API. One Docker image on Render; Dockerfile installs LibreOffice headless for DOCX→PDF.
-- Postgres on **Supabase** (pgvector later). Drizzle ORM + migrations. Not Render Postgres, not local files.
+- Postgres on **Supabase** (pgvector later). Drizzle ORM + migrations. Not Render Postgres, not local files. App connects via the **transaction pooler (6543) with `prepare: false`**. Migrations run via `MIGRATION_DATABASE_URL` (session pooler, 5432). Render and Supabase are both in us-east (Virginia).
 - Binary files (PDFs, logos) in **Supabase Storage** (private bucket) behind `src/lib/storage.ts`; Render disk is ephemeral.
 - pdfjs-dist (render in browser; text + line extraction with coordinates on server), pdf-lib (stamp, certificate, seal).
 - Inngest: workflow steps, retries, `waitForEvent` for approvals/replies, scheduled reminders (Phase 2+).
@@ -88,5 +88,6 @@ SMS/WhatsApp, native CRM connectors, Teams/Outlook, Stripe billing, identity ver
 - `scripts/gen-test-agreements` makes varied agreements the detector was NOT designed around (DOCX with tables, PDF with drawn lines, two-column signature blocks, multi-page with initials, scanned/image-only PDF). Automated E2E test (Playwright) covers the full path on desktop + mobile viewport.
 - `.env` never committed; keep `.env.example` current.
 - Small, frequent commits with clear messages.
+- Repo is **private until submission**. The README's "Submission checklist" (make repo public, last commit before the deadline, etc.) must be done on Nov 25. Remind the user.
 - README starts with "Test it in 3 minutes" + demo login. Setup steps include setting a monthly spend limit in the Anthropic console.
 - When unsure: make a reasonable decision, write it in `DECISIONS.md`, tell the user.
