@@ -34,6 +34,13 @@ RUN apt-get update \
  && apt-get clean && rm -rf /var/lib/apt/lists/* \
  && soffice --version
 
+# Pre-build LibreOffice's user profile so the first conversion after a deploy
+# doesn't pay the profile-initialization cost (~30% of a run on 0.1 CPU).
+ENV LO_PROFILE_DIR=/opt/lo-profile
+RUN soffice -env:UserInstallation=file://$LO_PROFILE_DIR --headless --norestore --terminate_after_init \
+ && test -d $LO_PROFILE_DIR/user \
+ && chown -R node:node $LO_PROFILE_DIR
+
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/fixtures ./fixtures

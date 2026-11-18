@@ -37,14 +37,19 @@ export interface ConversionResult {
 
 /**
  * Converts a DOCX (or other office doc) to PDF with headless LibreOffice.
- * Each run gets its own throwaway user profile so a crashed run can't
- * poison later ones.
+ *
+ * Runs share one LibreOffice user profile: initializing a fresh profile costs
+ * ~30% of a conversion on Render's 0.1 CPU. Sharing is safe because runs are
+ * serialized. The Docker image pre-builds the profile (LO_PROFILE_DIR) so the
+ * first conversion after a deploy is fast too. If a run fails, the profile is
+ * deleted so a corrupted profile can't break later runs.
  */
 export function convertToPdf(input: Buffer, ext = "docx"): Promise<ConversionResult> {
   return serialize(async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "convert-"));
     const src = path.join(dir, `input.${ext.replace(/[^a-z0-9]/gi, "")}`);
-    const profile = path.join(dir, "profile");
+    const profile = profileDir();
+    let failed = true;
     try {
       await writeFile(src, input);
       const started = Date.now();
@@ -75,11 +80,18 @@ export function convertToPdf(input: Buffer, ext = "docx"): Promise<ConversionRes
       const pdf = await readFile(path.join(dir, "input.pdf")).catch(() => {
         throw new ConversionError("LibreOffice finished but produced no PDF. The document may be corrupt or password-protected.");
       });
+      failed = false;
       return { pdf, durationMs: Date.now() - started, peakMemory: peak };
     } finally {
       await rm(dir, { recursive: true, force: true });
+      // Best effort; never mask the original conversion error.
+      if (failed) await rm(path.join(profile, "user"), { recursive: true, force: true }).catch(() => undefined);
     }
   });
+}
+
+function profileDir() {
+  return process.env.LO_PROFILE_DIR || path.join(tmpdir(), "signfile-lo-profile");
 }
 
 function runSoffice(args: string[]): Promise<void> {
