@@ -3,6 +3,7 @@ import path from "node:path";
 import { PDFDocument } from "pdf-lib";
 import { pingDatabase } from "@/lib/db/ping";
 import { convertToPdf, ConversionError } from "@/lib/pdf/convert";
+import { storageSelfTest } from "@/lib/storage";
 import { mb, memoryReport } from "@/lib/system/memory";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export const runtime = "nodejs";
 /**
  * GET /api/health          light: DB `select 1` + memory. Hit every 10 min by
  *                          an uptime pinger so Render and Supabase stay awake.
- * GET /api/health?deep=1   also converts a realistic multi-page DOCX with
+ * GET /api/health?deep=1   also round-trips a storage object, converts a realistic multi-page DOCX with
  *                          LibreOffice and reports duration + peak memory.
  *                          Single-flight and cached for 60s so it can't be
  *                          used to pin the CPU.
@@ -30,8 +31,13 @@ export async function GET(req: Request) {
   };
 
   if (deep) {
-    body.conversion = await deepCheck();
-    if (!(body.conversion as { ok: boolean }).ok) body.ok = false;
+    const [conversion, storage] = await Promise.all([
+      deepCheck(),
+      storageSelfTest().catch((e: Error) => ({ ok: false, error: e.message })),
+    ]);
+    body.conversion = conversion;
+    body.storage = storage;
+    if (!conversion.ok || !storage.ok) body.ok = false;
   }
 
   return Response.json(body, {

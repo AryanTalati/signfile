@@ -8,9 +8,15 @@
     "start": "next start",
     "lint": "eslint",
     "gen:agreements": "tsx scripts/gen-test-agreements/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:setup": "tsx --conditions=react-server --env-file=.env.local scripts/db-setup.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:verify": "tsx --env-file=.env.local scripts/verify-db.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.1",
+    "drizzle-orm": "^0.45.4",
     "next": "15.5.29",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.5.438",
@@ -28,6 +34,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "docx": "^9.15.4",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "15.5.29",
     "tailwindcss": "^4",

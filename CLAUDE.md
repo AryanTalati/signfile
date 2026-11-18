@@ -33,7 +33,7 @@ Unfamiliar PDF/DOCX → upload → fields detected or placed → send → client
 
 ## Stack
 - Next.js (App Router) + TypeScript: app, signing page, REST API. One Docker image on Render; Dockerfile installs LibreOffice headless for DOCX→PDF.
-- Postgres on **Supabase** (pgvector later). Drizzle ORM + migrations. Not Render Postgres, not local files. App connects via the **transaction pooler (6543) with `prepare: false`**. Migrations run via `MIGRATION_DATABASE_URL` (session pooler, 5432). Render and Supabase are both in us-east (Virginia).
+- Postgres on **Supabase** (pgvector later). Drizzle ORM + migrations. Not Render Postgres, not local files. Everything connects via the **transaction pooler (6543) with `prepare: false`** (`MIGRATION_DATABASE_URL` optional). Render is in Virginia, but **Supabase is in Oregon (us-west-2): ~60-70 ms per query**, so keep queries per request few, run independent ones in parallel, and never loop queries. **Local dev and Render share one database**: `npm run db:setup` migrates production, so run it before pushing code that needs the new schema. `npm run db:verify` checks RLS, grants, the insert-only events table and the purge function.
 - Binary files (PDFs, logos) in **Supabase Storage** (private bucket) behind `src/lib/storage.ts`; Render disk is ephemeral.
 - pdfjs-dist (render in browser; text + line extraction with coordinates on server), pdf-lib (stamp, certificate, seal).
 - Inngest: workflow steps, retries, `waitForEvent` for approvals/replies, scheduled reminders (Phase 2+).
