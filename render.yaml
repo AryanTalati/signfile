@@ -3,6 +3,7 @@ services:
     name: signfile
     runtime: docker
     plan: free
+    region: oregon # same region as Supabase (us-west-2)
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/live
     autoDeploy: true
