@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: signfile
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/live
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
