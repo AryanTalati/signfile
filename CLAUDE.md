@@ -89,6 +89,8 @@ SMS/WhatsApp, native CRM connectors, Teams/Outlook, Stripe billing, identity ver
 - `.env` never committed; keep `.env.example` current.
 - E2E (`npm run test:e2e`) runs desktop + phone and must stay green. Test accounts use `@signfile-e2e.example` and are purged in global teardown, so never use that domain for anything else. Before pushing a deploy-affecting change, also run the suite against the Docker image (`E2E_BASE_URL=http://localhost:10000`).
 - Auth: `requireAuth()` / `requireAdmin()` in every page and action behind login. Tenant data access always uses `auth.company.id`, never an id from the request.
+- Client IP: only via `getClientIp()` / `requestMeta()` (Cloudflare's `CF-Connecting-IP` on Render). Never read `X-Forwarded-For` directly: its first entry is client-controlled.
+- Unit tests: `npm run test:unit` (node:test via tsx).
 - Small, frequent commits with clear messages.
 - Repo is **private until submission**. The README's "Submission checklist" (make repo public, last commit before the deadline, etc.) must be done on Nov 25. Remind the user.
 - README starts with "Test it in 3 minutes" + demo login. Setup steps include setting a monthly spend limit in the Anthropic console.

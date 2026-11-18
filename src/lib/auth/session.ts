@@ -5,6 +5,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { db, schema } from "@/lib/db/client";
+import { getClientIp } from "@/lib/http/client-ip";
 
 const COOKIE = "sf_session";
 const TTL_DAYS = 30;
@@ -19,10 +20,10 @@ export interface AuthContext {
   sessionId: string;
 }
 
+/** Client IP (see getClientIp) and user agent, for sessions, the throttle and audit events. */
 export async function requestMeta() {
   const h = await headers();
-  const ip = (h.get("x-forwarded-for")?.split(",")[0] ?? h.get("x-real-ip") ?? "").trim() || null;
-  return { ip, userAgent: h.get("user-agent")?.slice(0, 500) ?? null };
+  return { ip: getClientIp(h), userAgent: h.get("user-agent")?.slice(0, 500) ?? null };
 }
 
 /** Creates a session row and sets the cookie. Only the token's hash is stored. */

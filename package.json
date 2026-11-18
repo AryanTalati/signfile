@@ -14,7 +14,8 @@
     "db:studio": "drizzle-kit studio",
     "db:verify": "tsx --env-file=.env.local scripts/verify-db.ts",
     "seed": "tsx --conditions=react-server --env-file=.env.local scripts/seed.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "tsx --test tests/unit/*.test.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",
