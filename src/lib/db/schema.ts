@@ -319,13 +319,20 @@ export const outbox = pgTable(
   (t) => [index("outbox_company_idx").on(t.companyId, t.createdAt), index("outbox_file_idx").on(t.fileId)],
 );
 
-/** PII-free record that a purge happened. Not cascaded from files. */
+/**
+ * PII-free record that a purge happened. company_id deliberately has NO
+ * foreign key: the row must outlive a purged company.
+ */
 export const deletionLog = pgTable("deletion_log", {
   id: id(),
-  companyId: companyId(),
+  companyId: uuid("company_id").notNull(),
+  /** 'client' = one client's Files (purge_client_files); 'company' = a whole company (purge_company). */
+  scope: text("scope").notNull().default("client"),
   deletedByUserId: uuid("deleted_by_user_id").references(() => users.id, { onDelete: "set null" }),
-  /** sha256 of the lower-cased client legal name, so a repeat request can be matched without storing the name. */
-  clientNameSha256: text("client_name_sha256").notNull(),
+  /** scope=client: sha256 of the lower-cased client legal name, so a repeat request can be matched without storing the name. */
+  clientNameSha256: text("client_name_sha256"),
   fileCount: integer("file_count").notNull(),
+  /** Row counts removed per table, e.g. { users: 1, sessions: 1, events: 1 }. Numbers only. */
+  counts: jsonb("counts").$type<Record<string, number>>().notNull().default({}),
   createdAt: createdAt(),
 });

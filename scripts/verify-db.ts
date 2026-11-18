@@ -54,6 +54,14 @@ async function main() {
       check("purge flag is off again after purge", flag !== "on", `flag='${flag}'`);
       await tx`insert into events (company_id, actor_type, type) values (${co.id}, 'system', 'probe')`;
       await expectError(tx, "events: DELETE still refused after purge", () => tx`delete from events where company_id=${co.id}`, /append-only/);
+      const [co2] = await tx`insert into companies (name, slug) values ('Verify Co 2', ${"verify2-" + Date.now()}) returning id`;
+      await tx`insert into users (company_id, email, name, password_hash) values (${co2.id}, ${"verify-" + Date.now() + "@signfile-e2e.example"}, 'Verify User', 'x')`;
+      await tx`insert into events (company_id, actor_type, type) values (${co2.id}, 'system', 'probe')`;
+      const [{ counts }] = await tx`select purge_company(${co2.id}) as counts`;
+      const [plog] = await tx`select scope, counts from deletion_log where company_id=${co2.id}`;
+      const [{ gone }] = await tx`select count(*)::int as gone from companies where id=${co2.id}`;
+      check("purge_company deletes the company and logs counts that outlive it", gone === 0 && plog?.scope === "company" && plog.counts.users === 1 && plog.counts.events === 1 && counts.users === 1);
+      check("deletion_log counts hold numbers only", Object.values(plog?.counts ?? { x: "?" }).every((v) => typeof v === "number"));
       throw new Rollback();
     });
   } catch (e) {

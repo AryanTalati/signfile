@@ -22,6 +22,20 @@
       "when": 1795039608592,
       "tag": "0002_purge_company",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795040909474,
+      "tag": "0003_deletion_log_company_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795040935558,
+      "tag": "0004_purge_company_logs",
+      "breakpoints": true
     }
   ]
 }

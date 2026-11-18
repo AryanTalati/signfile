@@ -12,6 +12,8 @@ Automates getting client agreements signed on every File: upload any agreement, 
 
 Or create your own company at `/signup`.
 
+> **Use test data only.** This is a demo deployment. Don't enter real names, real email addresses, or real client agreements, whether at signup, as signers, or in uploaded documents. Use made-up names and addresses on a reserved test domain such as `@example.com`. Emails show up in the in-app **Outbox**, so you never need a real inbox to test the full flow.
+
 ## Development
 
 ```bash
@@ -36,4 +38,4 @@ npm run test:e2e             # Playwright, desktop + phone; E2E_BASE_URL=https:/
 - [ ] Demo login in this README works on the live URL.
 - [ ] Anthropic monthly spend limit set.
 - [ ] README "Test it in 3 minutes", DECISIONS.md and the written description are final.
-- [ ] No real personal data in the repo or the live database.
+- [ ] No real personal data in the repo or the live database. To remove an account, find its company id and run `npm run purge:company -- <company-id>` (dry run), then add `--confirm`.
