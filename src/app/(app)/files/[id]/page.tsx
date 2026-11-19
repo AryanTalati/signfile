@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Alert, Card } from "@/components/ui";
 import { CopyLink } from "@/components/files/copy-link";
 import { RetrySeal } from "@/components/files/retry-seal";
+import { FileActions } from "@/components/files/file-actions";
 import { LocalTime } from "@/components/local-time";
 import { FileStatus } from "@/components/files/status";
 import { requireAuth } from "@/lib/auth/session";
@@ -79,6 +80,17 @@ export default async function FilePage({ params, searchParams }: { params: Promi
         </Alert>
       )}
 
+      {file.status === "voided" && (
+        <Alert>
+          Voided{file.voidedAt ? <> on {fmt(file.voidedAt)}</> : null}. Reason: {file.voidReason}
+        </Alert>
+      )}
+      <FileActions
+        fileId={file.id}
+        canResend={file.status === "sent" || file.status === "partially_signed"}
+        canVoid={["draft", "sent", "partially_signed", "changes_requested", "expired"].includes(file.status)}
+        waitingOn={live.map((r) => r.name).join(" and ") || null}
+      />
       <Card className="divide-y divide-border">
         <h2 className="px-4 py-3 text-sm font-semibold">Signers</h2>
         {recipients.map((r) => (

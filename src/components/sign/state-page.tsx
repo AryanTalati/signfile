@@ -6,7 +6,7 @@ const COPY: Record<Exclude<SigningState, "sign">, (o: { brand: string; doc: stri
   completed: (o) => ({ title: "This agreement is fully signed", body: `Everyone has signed "${o.doc}". ${o.brand} sends the final signed copy to all parties.` }),
   waiting: (o) => ({ title: "Not ready for you yet", body: `"${o.doc}" is waiting on another signer first. You'll get your link when it's your turn.` }),
   expired: (o) => ({ title: "This link has expired", body: `The signing link for "${o.doc}" has expired. Ask ${o.brand} to send you a new one.` }),
-  voided: (o) => ({ title: "This agreement was cancelled", body: `${o.brand} cancelled "${o.doc}", so it can no longer be signed. Contact them if you think this is a mistake.` }),
+  voided: (o) => ({ title: "This agreement was voided", body: `${o.brand} voided "${o.doc}", so it can no longer be signed. Contact them if you think this is a mistake.` }),
   replaced: (o) => ({ title: "This link was replaced", body: `This link for "${o.doc}" no longer works: it was forwarded or a newer version was sent. Use the most recent email from ${o.brand}, or ask them for a new link.` }),
   declined: (o) => ({ title: "You declined this agreement", body: `${o.brand} has been told. Contact them if you've changed your mind.` }),
   changes_requested: (o) => ({ title: "You requested changes", body: `${o.brand} has your comments and will send a revised version.` }),

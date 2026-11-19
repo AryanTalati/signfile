@@ -58,3 +58,15 @@ ${button(o.brand, o.link, "Review and countersign")}`,
   const text = `${o.clientLegalName} has signed "${o.documentName}". Countersign: ${o.link}`;
   return { subject, html, text };
 }
+
+export function voidedEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string }) {
+  const subject = `Voided: "${o.documentName}"`;
+  const html = layout(
+    o.brand,
+    `<p>Hi ${esc(o.recipientName.split(" ")[0])},</p>
+<p>${esc(o.brand.name)} has voided <strong>${esc(o.documentName)}</strong> for ${esc(o.clientLegalName)}. It can no longer be signed, and earlier signing links no longer work.</p>
+<p style="font-size:13px;color:#6b6b66">If you have questions, reply to ${esc(o.brand.name)} directly.</p>`,
+  );
+  const text = `${o.brand.name} has voided "${o.documentName}" for ${o.clientLegalName}. It can no longer be signed.`;
+  return { subject, html, text };
+}
