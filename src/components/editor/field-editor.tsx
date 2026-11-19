@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, ButtonLink, Card } from "@/components/ui";
 import { FIELD_META, PALETTE, ROLE_COLORS } from "@/lib/fields/meta";
 import { needsReview, type FieldDef, type FieldType } from "@/lib/fields/types";
+import { rolesFor, validateFields } from "@/lib/fields/validate";
 import { PdfPages, type DisplayPage } from "./pdf-pages";
 
 export interface EditorProps {
@@ -34,13 +35,18 @@ export function FieldEditor(props: EditorProps) {
   const [armed, setArmed] = useState<FieldType | null>(null);
   const [lastRole, setLastRole] = useState<"client" | "firm">("client");
   const [save, setSave] = useState<Save>({ state: "saved" });
-  const [problems, setProblems] = useState<string[]>([]);
   const [appending, setAppending] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const history = useRef<FieldDef[][]>([]);
   const pageEls = useRef(new Map<number, HTMLDivElement>());
   const first = useRef(true);
   const appendingRef = useRef(false);
+  // Autosave bookkeeping: one request in flight at a time, always sending the latest state.
+  const latest = useRef({ name, countersign, fields });
+  latest.current = { name, countersign, fields };
+  const rev = useRef(0); // bumped on every edit
+  const inFlight = useRef<Promise<void> | null>(null);
+  const again = useRef(false);
 
   // ---- mutations (with undo) ----
   const commit = useCallback((next: FieldDef[] | ((prev: FieldDef[]) => FieldDef[])) => {
@@ -65,37 +71,57 @@ export function FieldEditor(props: EditorProps) {
   }, [commit]);
 
   // ---- autosave ----
-  const saveNow = useCallback(async () => {
-    if (appendingRef.current) return; // never race the append (it would overwrite the new fields)
-    setSave({ state: "saving" });
-    try {
-      const res = await fetch(`/api/templates/${props.templateId}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ pdfSha256: props.pdfSha256, name: name.trim() || "Untitled agreement", countersign, fields }),
-      });
-      if (res.status === 401) return router.push(`/login?next=/templates/${props.templateId}`);
-      if (res.status === 409) return router.refresh();
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Save failed");
-      setProblems(data.problems ?? []);
-      setSave({ state: "saved" });
-    } catch (e) {
-      setSave({ state: "error", message: (e as Error).message });
+  // Saves are serialized: if one is in flight, the next runs right after it with the
+  // latest state, so an older request can never land after (and overwrite) a newer one.
+  // "Saved" is shown only when the server has the latest revision.
+  const saveNow = useCallback((): Promise<void> => {
+    if (appendingRef.current) return Promise.resolve(); // never race the append
+    if (inFlight.current) {
+      again.current = true;
+      return inFlight.current;
     }
-  }, [props.templateId, props.pdfSha256, name, countersign, fields, router]);
+    const run = (async () => {
+      do {
+        again.current = false;
+        const sent = rev.current;
+        const { name: n, countersign: c, fields: f } = latest.current;
+        setSave({ state: "saving" });
+        try {
+          const res = await fetch(`/api/templates/${props.templateId}`, {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ pdfSha256: props.pdfSha256, name: n.trim() || "Untitled agreement", countersign: c, fields: f }),
+          });
+          if (res.status === 401) return router.push(`/login?next=/templates/${props.templateId}`);
+          if (res.status === 409) return router.refresh();
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error ?? "Save failed");
+          setSave({ state: rev.current === sent ? "saved" : "dirty" });
+          if (rev.current !== sent) again.current = true;
+        } catch (e) {
+          setSave({ state: "error", message: (e as Error).message });
+          return;
+        }
+      } while (again.current && !appendingRef.current);
+    })().finally(() => {
+      inFlight.current = null;
+    });
+    inFlight.current = run;
+    return run;
+  }, [props.templateId, props.pdfSha256, router]);
 
   useEffect(() => {
     if (first.current) {
-      first.current = false;
-      void saveNow(); // validate on load
+      first.current = false; // nothing to save on load; validation runs client-side
       return;
     }
+    rev.current++;
     setSave({ state: "dirty" });
     const t = setTimeout(() => void saveNow(), 700);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, name, countersign]);
+  }, [fields, name, countersign, saveNow]);
+
+  const problems = useMemo(() => validateFields(fields, rolesFor(countersign), props.pages.length), [fields, countersign, props.pages.length]);
 
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {

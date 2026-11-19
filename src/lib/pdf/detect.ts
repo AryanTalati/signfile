@@ -19,6 +19,7 @@
  *                 column, the firm's name, or the document's defined terms
  */
 import { REVIEW_THRESHOLD, type FieldDef, type FieldType, type RoleDef } from "@/lib/fields/types";
+import { DEFAULT_ROLES } from "@/lib/fields/validate";
 import type { PageLayout, Rect, Seg, TextItem } from "./extract";
 
 
@@ -38,10 +39,7 @@ export interface DetectResult {
   stats: Record<string, number>;
 }
 
-export const DEFAULT_ROLES: RoleDef[] = [
-  { key: "client", label: "Client", order: 1, kind: "client" },
-  { key: "firm", label: "Firm (countersign)", order: 2, kind: "firm" },
-];
+export { DEFAULT_ROLES };
 
 type Side = "client" | "firm";
 type LabelKind = FieldType | "witness" | "heading" | "date" | "name_title";

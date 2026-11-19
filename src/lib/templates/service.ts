@@ -4,8 +4,9 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { AuthContext } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
-import { FIELD_TYPES, type FieldDef, type RoleDef } from "@/lib/fields/types";
-import { DEFAULT_ROLES, detectFields } from "@/lib/pdf/detect";
+import { FIELD_TYPES, type FieldDef } from "@/lib/fields/types";
+import { detectFields } from "@/lib/pdf/detect";
+import { DEFAULT_ROLES, rolesFor, validateFields } from "@/lib/fields/validate";
 import { extractLayout } from "@/lib/pdf/extract";
 import { prepareDocument, sha256 } from "@/lib/pdf/prepare";
 import { appendSignaturePage } from "@/lib/pdf/signature-page";
@@ -191,20 +192,7 @@ export const saveSchema = z.object({
   fields: z.array(fieldSchema).max(500),
 });
 
-export function rolesFor(countersign: boolean): RoleDef[] {
-  return countersign ? DEFAULT_ROLES : DEFAULT_ROLES.filter((r) => r.kind === "client");
-}
-
-/** Problems that block sending (shown in the editor; saving drafts is always allowed). */
-export function validateFields(fields: FieldDef[], roles: RoleDef[], pageCount: number): string[] {
-  const problems: string[] = [];
-  const keys = new Set(roles.map((r) => r.key));
-  for (const r of roles) if (!fields.some((f) => f.roleKey === r.key && f.type === "signature")) problems.push(`Add a signature field for the ${r.kind === "client" ? "client" : "firm"}.`);
-  const orphan = fields.filter((f) => f.type !== "firm_fill" && (!f.roleKey || !keys.has(f.roleKey)));
-  if (orphan.length) problems.push(`${orphan.length} field${orphan.length > 1 ? "s are" : " is"} assigned to a signer who isn't on this template.`);
-  if (fields.some((f) => f.page > pageCount)) problems.push("A field is on a page that doesn't exist.");
-  return problems;
-}
+export { rolesFor, validateFields };
 
 export async function saveTemplate(auth: AuthContext, templateId: string, input: z.infer<typeof saveSchema>) {
   const t = await getTemplate(auth, templateId);

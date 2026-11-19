@@ -25,6 +25,7 @@ test("upload PDF + DOCX, edit and save, scanned-PDF fallback", async ({ page }) 
   await expect(page.getByTestId("confidence").first()).toBeVisible();
   await page.locator('[data-testid="field"][data-role="client"][data-field-type="title"]').click();
   await page.getByTestId("inspector").getByRole("radio", { name: "Text" }).click();
+  await expect(page.locator('[data-testid="field"][data-role="client"][data-field-type="text"]')).toHaveCount(1);
   await saved();
   await page.reload();
   await expect(page.locator('[data-testid="field"][data-role="client"][data-field-type="text"]')).toHaveCount(1);
