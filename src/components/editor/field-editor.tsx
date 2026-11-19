@@ -489,6 +489,11 @@ export function FieldEditor(props: EditorProps) {
               {appending ? "Adding signature page…" : "+ Append a signature page instead"}
             </button>
           )}
+          {problems.length === 0 && (
+            <ButtonLink href={`/files/new?template=${props.templateId}`} className="mb-2 w-full">
+              Create a File with this template
+            </ButtonLink>
+          )}
           <ButtonLink href="/templates" variant="secondary" className="w-full">
             Done
           </ButtonLink>
