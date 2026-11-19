@@ -16,6 +16,7 @@ import { encryptedPdf } from "./encrypt";
 import {
   pdfAcroForm,
   pdfDateBlanks,
+  pdfUnknownParties,
   pdfDrawnLines,
   pdfLarge,
   pdfMultipageInitials,
@@ -57,6 +58,20 @@ const ASTRA = "Astra AI";
 type Gen = { exp: Omit<FixtureExpectation, "check">; make: () => Promise<Uint8Array | Buffer> };
 
 const fixtures: Gen[] = [
+  {
+    exp: {
+      file: "pdf-unknown-parties.pdf", format: "pdf", firmName: "Test Consulting Co", clientName: "Sample Partner LLC",
+      description: "Parties defined as 'the Company' and 'the Counterparty' (outside our vocabulary), firm account name not in the document, two-column blocks, zero-size leftover widget on page 1.",
+      outcome: "fields",
+      blocks: [
+        { role: "firm", page: "last", types: ["signature", "full_name", "title", "date_signed"] },
+        { role: "client", page: "last", types: ["signature", "full_name", "title", "date_signed"] },
+      ],
+      absent: [{ page: 1, types: ["signature", "text", "full_name"] }],
+      traps: ["Two blocks must never both go to the client", "First-defined party (Company) = firm, flagged", "Zero-size widget is not a field"],
+    },
+    make: () => pdfUnknownParties("Example Living, Inc.", "Sample Partner LLC"),
+  },
   {
     exp: {
       file: "pdf-date-blanks.pdf", format: "pdf", firmName: ASTRA, clientName: "Initech Test Co.",

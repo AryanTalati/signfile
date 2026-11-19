@@ -259,3 +259,35 @@ export async function pdfDateBlanks(firm: string, client: string, fill: boolean)
   }
   return w.doc.save();
 }
+
+/**
+ * Parties defined with words outside our vocabulary ("Company" + "Counterparty"), a firm
+ * account name that doesn't appear in the document, two-column blocks, and a zero-size
+ * leftover form widget at a page corner (as DocuSign exports leave behind).
+ */
+export async function pdfUnknownParties(first: string, second: string) {
+  const w = await Writer.create();
+  w.para("MUTUAL NON-DISCLOSURE AGREEMENT", { size: 15, bold: true, align: "center", after: 12 });
+  w.para(`This Mutual Non-Disclosure Agreement is entered into by ${first} (the "Company") and ${second} (the "Counterparty"). TEST DOCUMENT - NOT A REAL AGREEMENT.`, { after: 10 });
+  clauses(w, 6);
+  const form = w.doc.getForm();
+  const ghost = form.createTextField("Signature_leftover");
+  ghost.addToPage(w.page, { x: 0, y: 0, width: 0.5, height: 0.5, borderWidth: 0 });
+  w.newPage();
+  w.heading("SIGNATURES");
+  w.gap(10);
+  const top = w.y;
+  const cols = [
+    { x: w.margin, head: first.toUpperCase() },
+    { x: w.margin + w.width / 2 + 10, head: "COUNTERPARTY" },
+  ];
+  for (const c of cols) {
+    let y = top;
+    w.text(c.head, c.x, y, { bold: true, size: 10 });
+    for (const label of ["By:", "Name:", "Title:", "Date:"]) {
+      y -= 30;
+      w.text(`${label} ____________________________`, c.x, y, { size: 10 });
+    }
+  }
+  return w.doc.save();
+}

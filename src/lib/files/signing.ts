@@ -181,6 +181,11 @@ export async function submitSigning(
   baseUrl: string,
 ) {
   const view = await signingView(ctx);
+  // Defense in depth: the UI only offers this signer's fields, but never trust the client.
+  // A value for any other field (another signer's, firm-filled, system) rejects the whole submit.
+  const ownIds = new Set(view.mine.filter((f) => !hasNoSigner(f.type)).map((f) => f.id));
+  const foreign = Object.keys(input.values).filter((k) => !ownIds.has(k));
+  if (foreign.length) throw new SigningError("You can only fill in your own fields.");
   const values: Record<string, string> = {};
   const now = new Date();
   for (const f of view.mine) {

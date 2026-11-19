@@ -1,5 +1,60 @@
 [
   {
+    "file": "pdf-unknown-parties.pdf",
+    "format": "pdf",
+    "firmName": "Test Consulting Co",
+    "clientName": "Sample Partner LLC",
+    "description": "Parties defined as 'the Company' and 'the Counterparty' (outside our vocabulary), firm account name not in the document, two-column blocks, zero-size leftover widget on page 1.",
+    "outcome": "fields",
+    "blocks": [
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed"
+        ]
+      },
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed"
+        ]
+      }
+    ],
+    "absent": [
+      {
+        "page": 1,
+        "types": [
+          "signature",
+          "text",
+          "full_name"
+        ]
+      }
+    ],
+    "traps": [
+      "Two blocks must never both go to the client",
+      "First-defined party (Company) = firm, flagged",
+      "Zero-size widget is not a field"
+    ],
+    "check": {
+      "pages": 3,
+      "textChars": 3119,
+      "rotations": [
+        0,
+        0,
+        0
+      ],
+      "sizeKb": 4
+    }
+  },
+  {
     "file": "pdf-date-blanks.pdf",
     "format": "pdf",
     "firmName": "Astra AI",

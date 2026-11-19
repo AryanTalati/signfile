@@ -85,6 +85,10 @@ interface Candidate {
   roleHint?: { side: Side; conf: number; why: string };
   /** Short upper-case heading above the block ("INVESTOR:", "[COMPANY]") when no known party word matched. */
   partyHeading?: { text: string; x: number; y: number };
+  /** A defined party (preamble order) this field belongs to, when its role isn't known yet. */
+  party?: number;
+  /** Identifies the signature block (the party or heading text it was matched to). */
+  blockKey?: string;
   blank: Blank;
 }
 
@@ -149,12 +153,19 @@ const norm = (s: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+interface Party {
+  /** Order of definition in the preamble (0 = first). */
+  order: number;
+  term: string;
+  entity: string;
+  /** null when the term isn't a known party word ("Counterparty", "Investor"). */
+  side: Side | null;
+  conf: number;
+}
+
 interface PartyMap {
   firmName?: string;
-  /** defined term (lowercase) -> side */
-  terms: Map<string, Side>;
-  /** entity name (normalized) -> side */
-  entities: Map<string, Side>;
+  parties: Party[];
 }
 
 function sideOfWord(word: string, firmName?: string): Side | null {
@@ -172,34 +183,44 @@ function buildPartyMap(pages: PageLayout[], firmName?: string): PartyMap {
     .map((p) => p.items.map((i) => i.str).join(" "))
     .join(" ")
     .replace(/\s+/g, " ");
-  const terms = new Map<string, Side>();
-  const entities = new Map<string, Side>();
+  const parties: Party[] = [];
   const re = /([A-Z][\w&.'\- ]{1,80}?)(?:,[^()]{0,160}?)?\s*\(\s*(?:the\s+|each\s+a\s+|hereinafter\s+)?["“]([A-Z][A-Za-z ]{1,30})["”]\s*\)/g;
   for (const m of text.matchAll(re)) {
     const term = m[2].trim().toLowerCase();
     let entity = m[1].replace(/^(.*\b(between|and|by)\s+)/i, "").replace(/^\(\d\)\s*/, "").trim();
     entity = entity.split(/\s+/).slice(-6).join(" ");
+    if (parties.some((x) => x.term === term)) continue;
     let side: Side | null = null;
-    if (firmName && norm(entity).includes(norm(firmName))) side = "firm";
-    side ??= sideOfWord(term) ?? (AMBIGUOUS_CLIENT.includes(term) ? "client" : null);
-    if (!side) continue;
-    terms.set(term, side);
-    if (norm(entity).length >= 4) entities.set(norm(entity), side);
+    let conf = 0;
+    if (firmName && norm(entity).includes(norm(firmName))) [side, conf] = ["firm", 0.95];
+    else if (sideOfWord(term)) [side, conf] = [sideOfWord(term)!, 0.85];
+    // "the Company" is ambiguous: it's the client when the other party is clearly the firm
+    // ("Consultant ... the Company"), handled by the complement rule below; otherwise unknown.
+    parties.push({ order: parties.length, term, entity: norm(entity), side, conf });
   }
-  // If one side's term was found by the firm's name, the other defined party is the client.
-  return { firmName, terms, entities };
+  // A two-party agreement has one firm and one client: if one party is clearly one side,
+  // every other defined party is the other side (fairly confident, not certain).
+  const strong = parties.filter((x) => x.side && x.conf >= 0.85);
+  const strongSides = new Set(strong.map((x) => x.side));
+  if (strongSides.size === 1) {
+    const other: Side = strongSides.has("firm") ? "client" : "firm";
+    for (const x of parties) if (!strong.includes(x)) [x.side, x.conf] = [other, 0.8];
+  }
+  return { firmName, parties };
 }
 
-/** Which party a piece of text (heading, "on behalf of" line, label) refers to. */
-function markerSide(text: string, pm: PartyMap): { side: Side; conf: number; why: string } | null {
+type Marker = { side: Side | null; conf: number; why: string; party?: number };
+
+/** Which party a piece of text (heading, "on behalf of" line, label) refers to. side=null: a defined party whose role is unknown. */
+function markerSide(text: string, pm: PartyMap): Marker | null {
   if (text.length > 90) return null;
   const n = norm(text);
   if (!n) return null;
   if (pm.firmName && norm(pm.firmName).length >= 3 && n.includes(norm(pm.firmName))) return { side: "firm", conf: 0.95, why: "firm name" };
   for (const w of CLIENT_WORDS) if (new RegExp(`\\b${w}\\b`).test(n)) return { side: "client", conf: 0.9, why: `"${w}"` };
   for (const w of FIRM_WORDS) if (new RegExp(`\\b${w}\\b`).test(n)) return { side: "firm", conf: 0.9, why: `"${w}"` };
-  for (const [term, side] of pm.terms) if (new RegExp(`\\b${term}\\b`).test(n)) return { side, conf: 0.85, why: `defined term "${term}"` };
-  for (const [ent, side] of pm.entities) if (n.includes(ent)) return { side, conf: 0.85, why: "defined party name" };
+  for (const p of pm.parties) if (new RegExp(`\\b${p.term}\\b`).test(n)) return { side: p.side, conf: p.conf, why: `defined term "${p.term}"`, party: p.order };
+  for (const p of pm.parties) if (p.entity.length >= 4 && n.includes(p.entity)) return { side: p.side, conf: p.conf, why: `defined party "${p.entity}"`, party: p.order };
   for (const w of AMBIGUOUS_CLIENT) if (new RegExp(`\\b${w}\\b`).test(n) && n.split(" ").length <= 6) return { side: "client", conf: 0.6, why: `"${w}" (ambiguous)` };
   return null;
 }
@@ -483,8 +504,9 @@ function assignRoles(cands: Candidate[], phrasesByPage: Map<number, Phrase[]>, p
   for (const c of cands) {
     // r0: the field's own label names the party ("Client initials", "Signed for Astra AI").
     const own = c.blank.label && markerSide(c.blank.label.text, pm);
-    if (own && own.conf >= 0.85) {
-      c.roleHint = own;
+    if (own && own.side && own.conf >= 0.85) {
+      c.roleHint = { side: own.side, conf: own.conf, why: own.why };
+      c.blockKey = own.party !== undefined ? `party:${own.party}` : `label:${c.blank.label!.text}`;
       continue;
     }
     const phrases = phrasesByPage.get(c.page) ?? [];
@@ -494,11 +516,13 @@ function assignRoles(cands: Candidate[], phrasesByPage: Map<number, Phrase[]>, p
     );
     const bs = behalf && markerSide(behalf.text, pm);
     if (bs) {
-      c.roleHint = { ...bs, why: `below: ${bs.why}` };
+      c.blockKey = bs.party !== undefined ? `party:${bs.party}` : `text:${behalf!.text}`;
+      if (bs.side) c.roleHint = { side: bs.side, conf: bs.conf, why: `below: ${bs.why}` };
+      else c.party = bs.party;
       continue;
     }
     // r2: nearest party heading above, preferring the same column.
-    let best: { score: number; hint: NonNullable<Candidate["roleHint"]> } | null = null;
+    let best: { score: number; hint: Marker; text: string } | null = null;
     for (const p of phrases) {
       if (p.baseline > c.y + c.h + 2 || c.y - p.baseline > 360) continue;
       if (p.x > c.x + c.w) continue; // headings to the right belong to another column
@@ -508,7 +532,7 @@ function assignRoles(cands: Candidate[], phrasesByPage: Map<number, Phrase[]>, p
       const overlap = xOverlap(p.x, p.x2, c.x - 10, c.x + c.w);
       const hPenalty = overlap > 0 ? 0 : Math.max(0, c.x - p.x2) * 0.3;
       const score = Math.max(0, c.y - p.baseline) + hPenalty;
-      if (!best || score < best.score) best = { score, hint: { ...ms, conf: ms.conf - (overlap > 0 ? 0 : 0.05), why: `heading: ${ms.why}` } };
+      if (!best || score < best.score) best = { score, text: p.text, hint: { ...ms, conf: ms.conf - (overlap > 0 ? 0 : 0.05), why: `heading: ${ms.why}` } };
     }
     // r3: an unnamed party heading ("INVESTOR:") directly above the block in the same column.
     // A closer unnamed heading ends the previous party's block, so it beats a known party word further up.
@@ -517,7 +541,9 @@ function assignRoles(cands: Candidate[], phrasesByPage: Map<number, Phrase[]>, p
       .sort((a, b) => b.baseline - a.baseline)[0];
     const headIsCloser = head && !markerSide(head.text, pm) && (!best || c.y - head.baseline < best.score);
     if (best && !headIsCloser) {
-      c.roleHint = best.hint;
+      c.blockKey = best.hint.party !== undefined ? `party:${best.hint.party}` : `text:${best.text}`;
+      if (best.hint.side) c.roleHint = { side: best.hint.side, conf: best.hint.conf, why: best.hint.why };
+      else c.party = best.hint.party;
       continue;
     }
     if (head) c.partyHeading = { text: head.text, x: head.x, y: head.baseline };
@@ -682,6 +708,20 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
 
   // Pass 5: roles.
   assignRoles(cands, phrasesByPage, pm);
+  // Defined parties whose role isn't known ("the Counterparty"): if the other side is known they're
+  // the opposite; otherwise the first-defined party is the firm, the next the client. Always flagged.
+  {
+    const known = new Set(cands.filter((c) => c.roleHint).map((c) => c.roleHint!.side));
+    const unresolved = [...new Set(cands.filter((c) => !c.roleHint && c.party !== undefined).map((c) => c.party!))].sort((a, b) => a - b);
+    unresolved.forEach((party, i) => {
+      const p = pm.parties[party];
+      const hint =
+        known.size === 1
+          ? { side: (known.has("firm") ? "client" : "firm") as Side, conf: 0.6, why: `defined party "${p.term}" (the other party)` }
+          : { side: (i === 0 ? "firm" : "client") as Side, conf: 0.5, why: `defined party "${p.term}" (${i === 0 ? "first" : "second"} party in the preamble; check)` };
+      for (const c of cands.filter((x) => !x.roleHint && x.party === party)) c.roleHint = hint;
+    });
+  }
   // Unnamed party headings: each distinct heading is one party. If one side is already known,
   // they're the other side; if none is, first block = client, second = firm (flagged for review).
   const sidesSeen = new Set(cands.filter((c) => c.roleHint).map((c) => c.roleHint!.side));
@@ -694,14 +734,20 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
     else if (sidesSeen.size === 0 && headings.length >= 2) headingSide.set(key, { side: i === 0 ? "client" : "firm", conf: 0.5, why: `heading "${h.text}" (${i === 0 ? "first" : "second"} party; check)` });
     else headingSide.set(key, { side: "client", conf: 0.45, why: `heading "${h.text}"` });
   });
-  for (const c of cands.filter((x) => !x.roleHint && x.partyHeading)) c.roleHint = headingSide.get(`${c.page}:${c.partyHeading!.text}`);
+  for (const c of cands.filter((x) => !x.roleHint && x.partyHeading)) {
+    c.roleHint = headingSide.get(`${c.page}:${c.partyHeading!.text}`);
+    c.blockKey = `heading:${c.partyHeading!.text}`;
+  }
   // Fields without a hint inherit from the nearest field with direct evidence in the same block (no chaining).
   const evidenced = cands.filter((x) => x.roleHint);
   for (const c of cands.filter((x) => !x.roleHint && !x.partyHeading)) {
     const near = evidenced
       .filter((o) => o.page === c.page && xOverlap(o.x - 30, o.x + o.w + 30, c.x, c.x + c.w) > 0 && Math.abs(o.y - c.y) < 160)
       .sort((a, b) => Math.abs(a.y - c.y) - Math.abs(b.y - c.y))[0];
-    if (near?.roleHint) c.roleHint = { ...near.roleHint, conf: near.roleHint.conf - 0.1, why: `same block as a ${near.type}` };
+    if (near?.roleHint) {
+      c.roleHint = { ...near.roleHint, conf: near.roleHint.conf - 0.1, why: `same block as a ${near.type}` };
+      c.blockKey = near.blockKey;
+    }
   }
   // Complement: if only one side was ever identified, remaining unknown fields are the other side.
   for (const c of cands.filter((x) => !x.roleHint)) {
@@ -709,6 +755,29 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
       const other: Side = sidesSeen.has("firm") ? "client" : "firm";
       c.roleHint = { side: other, conf: 0.65, why: "the other party" };
     } else c.roleHint = { side: "client", conf: 0.4, why: "no party heading found" };
+  }
+
+  // Two different signature blocks must not resolve to the same signer on weak evidence (both
+  // "client" because neither party was recognised). Split them: preamble order if known, else
+  // reading order; first block = firm, second = client. Both flagged for review.
+  for (const page of new Set(cands.map((c) => c.page))) {
+    const sigs = cands.filter((c) => c.page === page && c.type === "signature" && c.blockKey);
+    for (const side of ["client", "firm"] as Side[]) {
+      const blocks = [...new Set(sigs.filter((c) => c.roleHint!.side === side).map((c) => c.blockKey!))];
+      if (blocks.length < 2) continue;
+      const members = (k: string) => cands.filter((c) => c.page === page && c.blockKey === k);
+      if (blocks.some((k) => members(k).some((c) => c.roleHint!.conf >= 0.9))) continue; // one block is certain
+      const order = (k: string) => {
+        const m = /^party:(\d+)$/.exec(k);
+        const first = members(k).sort((a, b) => a.y - b.y || a.x - b.x)[0];
+        return m ? Number(m[1]) * 1e6 : 1e9 + first.y * 1000 + first.x;
+      };
+      blocks.sort((a, b) => order(a) - order(b));
+      blocks.slice(0, 2).forEach((k, i) => {
+        for (const c of members(k))
+          c.roleHint = { side: i === 0 ? "firm" : "client", conf: 0.5, why: `two signature blocks looked like the same party; ${i === 0 ? "first" : "second"} block assumed ${i === 0 ? "firm" : "client"}, check` };
+      });
+    }
   }
 
   // Keep date/name/title only if their block has a signature for the same party (or it's a form widget).

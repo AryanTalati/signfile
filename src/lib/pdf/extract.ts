@@ -129,8 +129,13 @@ async function extractPage(page: pdfjs.PDFPageProxy): Promise<PageLayout> {
   const widgets: Widget[] = [];
   for (const a of await page.getAnnotations()) {
     if (a.subtype !== "Widget" || !a.rect) continue;
+    // Hidden (flag 2) or no-view (flag 32) widgets aren't real fields (DocuSign leaves these behind).
+    if (a.hidden || ((a.annotationFlags ?? 0) & (2 | 32))) continue;
     const [x1, y1] = viewport.convertToViewportPoint(a.rect[0], a.rect[1]);
     const [x2, y2] = viewport.convertToViewportPoint(a.rect[2], a.rect[3]);
+    const wx = Math.min(x1, x2), wy = Math.min(y1, y2), ww = Math.abs(x2 - x1), wh = Math.abs(y2 - y1);
+    // Degenerate or off-page widgets (zero-size leftovers at a page corner) aren't fields either.
+    if (ww < 8 || wh < 6 || wx < -1 || wy < -1 || wx + ww > viewport.width + 1 || wy + wh > viewport.height + 1) continue;
     const kind = a.fieldType === "Sig" ? "signature" : a.fieldType === "Tx" ? "text" : a.checkBox ? "checkbox" : "other";
     widgets.push({ name: String(a.fieldName ?? ""), kind, x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) });
   }

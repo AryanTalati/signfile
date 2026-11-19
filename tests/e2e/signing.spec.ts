@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { sendFile, signupFresh as signFresh, signViaLink } from "./helpers";
+import { expectOnlyOwnFields, sendFile, signupFresh as signFresh, signViaLink } from "./helpers";
 
 test.skip(!process.env.E2E_BASE_URL, "needs E2E_BASE_URL (Docker image) for uploads");
 test.setTimeout(240_000);
@@ -60,4 +60,30 @@ test("draw a signature on the canvas", async ({ page, browser }) => {
 test("an invalid link is a 404", async ({ page }) => {
   const res = await page.goto("/sign/not-a-real-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   expect(res?.status()).toBe(404);
+});
+
+test("client link shows only client fields; submitting another signer's field is rejected", async ({ page, browser }) => {
+  await signFresh(page, "Test Consulting Co");
+  const { fileUrl, clientLink } = await sendFile(page, "fixtures/agreements/pdf-unknown-parties.pdf", { company: "Sample Partner LLC", name: "Riley Example", email: "riley@example.com" });
+  const c = await (await browser.newContext()).newPage();
+  await c.goto(clientLink);
+  await c.getByRole("button", { name: /I agree/ }).click();
+  // Client's block only: signature, name, title, date. The firm's block is not signable here.
+  await expect(c.locator('[data-testid="sign-field-signature"]')).toHaveCount(1);
+  await expectOnlyOwnFields(c, 4);
+  await c.getByRole("button", { name: /^(Start|Next field)$/ }).click();
+  await c.getByRole("button", { name: "Adopt and sign" }).click();
+  await c.getByRole("button", { name: "Next field" }).click();
+  await c.getByRole("dialog").getByRole("textbox").fill("COO");
+  await c.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+  const res = c.waitForResponse((r) => r.url().includes("/submit"));
+  await c.getByRole("button", { name: "Finish and sign" }).click();
+  expect((await res).status()).toBe(422);
+  await expect(c.getByText("You can only fill in your own fields.")).toBeVisible();
+  await page.goto(fileUrl);
+  await expect(page.getByTestId("recipient-client").getByTestId("recipient-status")).toHaveText("Opened");
+  // Without tampering, the same signer can still sign.
+  await c.unroute("**/api/sign/*/submit");
+  await c.getByRole("button", { name: "Finish and sign" }).click();
+  await expect(c.getByTestId("sign-done")).toBeVisible();
 });

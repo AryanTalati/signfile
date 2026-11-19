@@ -68,3 +68,16 @@ export async function signViaLink(page: Page, link: string) {
   if (!res.ok()) throw new Error(`signing submit failed: ${res.status()} ${await res.text()}`);
   await expect(page.getByTestId("sign-done")).toBeVisible({ timeout: 30_000 });
 }
+
+/**
+ * On an open signing page (after consent): the visible signable fields must be exactly this
+ * signer's, and a submit that smuggles in values for other fields must be rejected.
+ */
+export async function expectOnlyOwnFields(page: Page, expectedCount: number) {
+  await expect(page.locator('[data-testid^="sign-field-"]')).toHaveCount(expectedCount);
+  await page.route("**/api/sign/*/submit", async (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}");
+    for (let i = 1; i <= 30; i++) body.values[`f${i}`] ??= "data:image/png;base64,iVBORw0KGgo=";
+    await route.continue({ postData: JSON.stringify(body) });
+  });
+}
