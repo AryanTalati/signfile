@@ -17,9 +17,13 @@
     "test:e2e": "playwright test",
     "test:unit": "tsx --conditions=react-server --test tests/unit/*.test.ts",
     "purge:company": "tsx --env-file=.env.local scripts/purge-company.ts",
-    "eval:detection": "docker build --platform linux/amd64 -q --target tools -t signfile:tools . >/dev/null && docker run --rm --platform linux/amd64 -v \"/Users/aryantalati/signfile/fixtures:/app/fixtures\" signfile:tools npx tsx --conditions=react-server scripts/eval-detection.ts"
+    "eval:detection": "docker build --platform linux/amd64 -q --target tools -t signfile:tools . >/dev/null && docker run --rm --platform linux/amd64 -v \"/Users/aryantalati/signfile/fixtures:/app/fixtures\" signfile:tools npx tsx --conditions=react-server scripts/eval-detection.ts",
+    "copy-pdf-worker": "node -e \"require('fs').copyFileSync(require.resolve('pdfjs-dist/build/pdf.worker.min.mjs'),'public/pdf.worker.min.mjs')\"",
+    "prebuild": "npm run copy-pdf-worker",
+    "predev": "npm run copy-pdf-worker"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.1.1",
     "@node-rs/argon2": "^2.2.2",
     "@supabase/supabase-js": "^2.119.1",
     "drizzle-orm": "^0.45.4",
@@ -34,7 +38,6 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@napi-rs/canvas": "^1.1.1",
     "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

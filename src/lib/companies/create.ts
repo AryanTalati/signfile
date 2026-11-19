@@ -36,21 +36,33 @@ export async function createCompanyWithAdmin(input: {
   slug?: string;
 }) {
   const email = normalizeEmail(input.email);
+  const t0 = Date.now();
   const passwordHash = await hashPassword(input.password);
+  const hashMs = Date.now() - t0;
   const base = input.slug ?? slugify(input.companyName);
 
   // Two signups can race for the same slug (or email). On a unique violation,
   // retry with a random slug suffix; a duplicate email is reported as taken.
   for (let attempt = 0; ; attempt++) {
     try {
-      return await insertCompany(input, email, passwordHash, base, attempt);
+      const t1 = Date.now();
+      const out = await insertCompany(input, email, passwordHash, base, attempt);
+      const txMs = Date.now() - t1;
+      if (hashMs + txMs > 2000) console.warn(`slow signup: hash ${hashMs} ms, transaction ${txMs} ms, attempt ${attempt}`);
+      return out;
     } catch (e) {
+      console.warn(`signup attempt ${attempt} failed after hash ${hashMs} ms: ${(e as Error).message}`);
       const v = uniqueViolation(e);
       if (v?.includes("email")) throw new EmailTakenError();
-      if (v?.includes("slug") && attempt < 3) continue;
+      if ((v?.includes("slug") || isLockTimeout(e)) && attempt < 3) continue;
       throw e;
     }
   }
+}
+
+function isLockTimeout(e: unknown): boolean {
+  for (let cur = e as { code?: string; cause?: unknown } | undefined; cur; cur = cur.cause as typeof cur) if (cur.code === "55P03") return true;
+  return false;
 }
 
 /** Constraint name if `e` (or its cause, as Drizzle wraps driver errors) is a unique violation. */
@@ -69,6 +81,8 @@ async function insertCompany(
   attempt: number,
 ) {
   return db.transaction(async (tx) => {
+    // Never wait long on another signup's lock (same slug at the same moment): fail fast and retry.
+    await tx.execute(sql`set local lock_timeout = '5s'`);
     const taken = await tx
       .select({ id: schema.users.id })
       .from(schema.users)

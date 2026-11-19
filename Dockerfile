@@ -53,6 +53,11 @@ ENV NODE_ENV=production \
 
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+# pdf.js loads its worker and @napi-rs/canvas dynamically, which Next's file
+# tracing misses: ship both packages whole.
+COPY --from=deps --chown=node:node /app/node_modules/pdfjs-dist ./node_modules/pdfjs-dist
+COPY --from=deps --chown=node:node /app/node_modules/@napi-rs ./node_modules/@napi-rs
 COPY --from=build --chown=node:node /app/fixtures ./fixtures
 
 USER node

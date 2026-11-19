@@ -164,3 +164,6 @@ fixtures/agreements/pdf-large.pdf
 # Playwright
 test-results/
 playwright-report/
+
+# Copied from pdfjs-dist at build time
+public/pdf.worker.min.mjs

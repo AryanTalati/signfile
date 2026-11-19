@@ -1,5 +1,6 @@
 import "server-only";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -24,8 +25,10 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/** SOFFICE_PATH if it exists on this machine, else `soffice` on PATH (a stale macOS path must not break Docker). */
 export function sofficeBinary(): string {
-  return process.env.SOFFICE_PATH || "soffice";
+  const p = process.env.SOFFICE_PATH;
+  return p && existsSync(p) ? p : "soffice";
 }
 
 export interface ConversionResult {

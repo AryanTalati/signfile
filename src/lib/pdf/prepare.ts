@@ -9,6 +9,7 @@
  */
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -158,7 +159,7 @@ async function qpdf(input: Uint8Array, args: string[]): Promise<Uint8Array> {
     const out = path.join(dir, "out.pdf");
     await writeFile(src, input);
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(process.env.QPDF_PATH || "qpdf", [...args, src, out], { stdio: ["ignore", "ignore", "pipe"] });
+      const child = spawn(process.env.QPDF_PATH && existsSync(process.env.QPDF_PATH) ? process.env.QPDF_PATH : "qpdf", [...args, src, out], { stdio: ["ignore", "ignore", "pipe"] });
       let err = "";
       child.stderr.on("data", (d) => (err += d));
       const t = setTimeout(() => child.kill("SIGKILL"), 30_000);
