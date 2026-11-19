@@ -10,6 +10,7 @@ export const FIELD_TYPES = [
   "text",
   "checkbox",
   "firm_fill",
+  "agreement_date",
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 
@@ -35,7 +36,7 @@ export interface FieldDef {
   w: number;
   h: number;
   type: FieldType;
-  /** Which role fills it. firm_fill fields have no role (filled at File creation). */
+  /** Which role fills it. null for firm_fill (filled at File creation) and agreement_date (filled automatically when the last party signs). */
   roleKey: string | null;
   label: string;
   required: boolean;
@@ -51,6 +52,9 @@ export interface FieldDef {
 }
 
 export const REVIEW_THRESHOLD = 0.7;
+/** Field types nobody signs: filled by the firm at File creation, or by the system. */
+export const NO_SIGNER_TYPES: FieldType[] = ["firm_fill", "agreement_date"];
+export const hasNoSigner = (t: FieldType) => NO_SIGNER_TYPES.includes(t);
 export const needsReview = (f: FieldDef) => !f.reviewed && f.source !== "manual" && f.confidence < REVIEW_THRESHOLD;
 
 export interface PageInfo {

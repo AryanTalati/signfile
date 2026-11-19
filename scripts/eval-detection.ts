@@ -22,6 +22,7 @@ interface Exp {
   outcome: "fields" | "append" | "reject";
   rejectCode?: string;
   blocks?: { role: string; page: PageRef; types: string[] }[];
+  absent?: { role?: string; page: PageRef; types: string[] }[];
   signatures?: { role: string; page: PageRef }[];
   initials?: { role: string; pages: number[] }[];
 }
@@ -82,10 +83,11 @@ async function evalOne(set: string, dir: string, e: Exp): Promise<Row> {
   }
 
   const matched = new Set<FieldDef>();
+  const roleOf = (r: string) => (r === "none" ? null : r);
   for (const b of e.blocks ?? (e.signatures ?? []).map((s) => ({ ...s, types: ["signature"] }))) {
     for (const type of b.types) {
       row.expectedFields++;
-      const hit = det.fields.find((f) => !matched.has(f) && f.page === pg(b.page) && f.type === type && f.roleKey === b.role);
+      const hit = det.fields.find((f) => !matched.has(f) && f.page === pg(b.page) && f.type === type && f.roleKey === roleOf(b.role));
       if (hit) {
         row.found++;
         matched.add(hit);
@@ -97,6 +99,14 @@ async function evalOne(set: string, dir: string, e: Exp): Promise<Row> {
         matched.add(wrong);
         row.missing.push(`${b.role} ${type} p${pg(b.page)} (found as ${wrong.roleKey})`);
       } else row.missing.push(`${b.role} ${type} p${pg(b.page)}`);
+    }
+  }
+  for (const a of e.absent ?? []) {
+    for (const type of a.types) {
+      row.expectedFields++;
+      const bad = det.fields.find((f) => f.page === pg(a.page) && f.type === type && (a.role === undefined || f.roleKey === roleOf(a.role)));
+      if (bad) row.missing.push(`should NOT have ${a.role ?? ""} ${type} p${pg(a.page)} (filled blank)`);
+      else row.found++;
     }
   }
   for (const ini of e.initials ?? []) {

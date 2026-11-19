@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { AuthContext } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
-import { FIELD_TYPES, type FieldDef } from "@/lib/fields/types";
+import { FIELD_TYPES, hasNoSigner, type FieldDef } from "@/lib/fields/types";
 import { detectFields } from "@/lib/pdf/detect";
 import { DEFAULT_ROLES, rolesFor, validateFields } from "@/lib/fields/validate";
 import { extractLayout } from "@/lib/pdf/extract";
@@ -201,7 +201,7 @@ export async function saveTemplate(auth: AuthContext, templateId: string, input:
   const roles = rolesFor(input.countersign);
   const fields: FieldDef[] = input.fields
     .filter((f) => f.page <= t.version.pageCount)
-    .map((f) => ({ ...f, x: Math.min(f.x, 1 - f.w), y: Math.min(f.y, 1 - f.h), roleKey: f.type === "firm_fill" ? null : f.roleKey }));
+    .map((f) => ({ ...f, x: Math.min(f.x, 1 - f.w), y: Math.min(f.y, 1 - f.h), roleKey: hasNoSigner(f.type) ? null : f.roleKey }));
   await db.transaction(async (tx) => {
     await tx.update(schema.templateVersions).set({ fields, roles }).where(and(eq(schema.templateVersions.id, t.version.id), eq(schema.templateVersions.companyId, auth.company.id)));
     await tx

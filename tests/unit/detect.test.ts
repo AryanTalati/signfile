@@ -18,6 +18,7 @@ interface Exp {
   outcome: string;
   rejectCode?: string;
   blocks?: { role: string; page: PageRef; types: string[] }[];
+  absent?: { role?: string; page: PageRef; types: string[] }[];
   initials?: { role: string; pages: number[] }[];
 }
 
@@ -36,8 +37,19 @@ for (const dir of sets) {
       }
       const pg = (p: PageRef) => (p === "last" ? layout.length : p);
       const missing: string[] = [];
+      const roleOf = (r: string) => (r === "none" ? null : r);
+      const used = new Set<object>();
       for (const b of e.blocks ?? [])
-        for (const t of b.types) if (!det.fields.some((f) => f.page === pg(b.page) && f.type === t && f.roleKey === b.role)) missing.push(`${b.role} ${t} p${pg(b.page)}`);
+        for (const t of b.types) {
+          const hit = det.fields.find((f) => !used.has(f) && f.page === pg(b.page) && f.type === t && f.roleKey === roleOf(b.role));
+          if (hit) used.add(hit);
+          else missing.push(`${b.role} ${t} p${pg(b.page)}`);
+        }
+      for (const a of e.absent ?? [])
+        for (const t of a.types)
+          if (det.fields.some((f) => f.page === pg(a.page) && f.type === t && (a.role === undefined || f.roleKey === roleOf(a.role)))) missing.push(`should NOT have ${a.role ?? ""} ${t} p${pg(a.page)}`);
+      for (const f of det.fields.filter((x) => x.type === "agreement_date" || (x.type === "firm_fill" && x.source === "rule")))
+        assert.ok(f.confidence < 0.7 && f.roleKey === null, `date field ${f.id} should be flagged and have no signer`);
       for (const ini of e.initials ?? [])
         for (const p of ini.pages) if (!det.fields.some((f) => f.page === p && f.type === "initials" && f.roleKey === ini.role)) missing.push(`${ini.role} initials p${p}`);
       assert.deepEqual(missing, [], `missing fields: ${missing.join(", ")}`);

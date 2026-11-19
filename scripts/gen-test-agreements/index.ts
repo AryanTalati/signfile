@@ -11,10 +11,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import { docxDotLeaders, docxTableBlocks } from "./docx-fixtures";
+import { docxDotLeaders, docxFilledDate, docxTableBlocks } from "./docx-fixtures";
 import { encryptedPdf } from "./encrypt";
 import {
   pdfAcroForm,
+  pdfDateBlanks,
   pdfDrawnLines,
   pdfLarge,
   pdfMultipageInitials,
@@ -40,7 +41,9 @@ export interface FixtureExpectation {
   /** Minimum signature fields the detector must find, by role and page. */
   signatures?: { role: Role; page: PageRef }[];
   /** Field types each party's signature block should contain (the eval reports found vs expected per type). */
-  blocks?: { role: Role; page: PageRef; types: string[] }[];
+  blocks?: { role: Role | "none"; page: PageRef; types: string[] }[];
+  /** Field types that must NOT be detected (e.g. blanks already filled in). role "none" = no-signer fields. */
+  absent?: { role?: Role | "none"; page: PageRef; types: string[] }[];
   initials?: { role: Role; pages: number[] }[];
   /** Things a naive detector gets wrong on this file. */
   traps?: string[];
@@ -54,6 +57,53 @@ const ASTRA = "Astra AI";
 type Gen = { exp: Omit<FixtureExpectation, "check">; make: () => Promise<Uint8Array | Buffer> };
 
 const fixtures: Gen[] = [
+  {
+    exp: {
+      file: "pdf-date-blanks.pdf", format: "pdf", firmName: ASTRA, clientName: "Initech Test Co.",
+      description: "Empty date blanks in body text: 'made as of ____ (the \"Effective Date\")', 'Dated: ____', 'Signed this ___ day of ____, 2026'.",
+      outcome: "fields",
+      blocks: [
+        { role: "none", page: 1, types: ["agreement_date", "firm_fill"] },
+        { role: "none", page: "last", types: ["firm_fill"] },
+        { role: "client", page: "last", types: ["signature", "full_name", "date_signed"] },
+        { role: "firm", page: "last", types: ["signature", "full_name", "date_signed"] },
+      ],
+      traps: ["Effective Date blank -> 'Agreement date' (automatic); other date blanks -> 'Filled by you'", "'Signed this ___ day of' is a date, not a signature line", "Date fields are medium confidence and flagged for review"],
+    },
+    make: () => pdfDateBlanks(ASTRA, "Initech Test Co.", false),
+  },
+  {
+    exp: {
+      file: "pdf-prefilled-blanks.pdf", format: "pdf", firmName: ASTRA, clientName: "Initech Test Co.",
+      description: "Same document with values already typed over the blanks (DocuSign/Word-filled): dates and the client's printed name.",
+      outcome: "fields",
+      blocks: [
+        { role: "client", page: "last", types: ["signature", "date_signed"] },
+        { role: "firm", page: "last", types: ["signature", "full_name", "date_signed"] },
+      ],
+      absent: [
+        { role: "none", page: 1, types: ["agreement_date", "firm_fill"] },
+        { role: "none", page: "last", types: ["agreement_date", "firm_fill"] },
+        { role: "client", page: "last", types: ["full_name"] },
+      ],
+      traps: ["A blank with text over it is filled: no field"],
+    },
+    make: () => pdfDateBlanks(ASTRA, "Initech Test Co.", true),
+  },
+  {
+    exp: {
+      file: "docx-filled-date.docx", format: "docx", firmName: ASTRA, clientName: "Hooli Test Systems",
+      description: "Word document where the Effective Date was typed in as underlined text.",
+      outcome: "fields",
+      blocks: [
+        { role: "client", page: "last", types: ["signature", "full_name"] },
+        { role: "firm", page: "last", types: ["signature", "full_name"] },
+      ],
+      absent: [{ role: "none", page: 1, types: ["agreement_date", "firm_fill"] }],
+      traps: ["Underlined typed text renders as text on a line: filled, no field"],
+    },
+    make: () => docxFilledDate(ASTRA, "Hooli Test Systems"),
+  },
   {
     exp: {
       file: "docx-table-blocks.docx", format: "docx", firmName: ASTRA, clientName: "Globex Test Industries Ltd",
@@ -70,7 +120,7 @@ const fixtures: Gen[] = [
       file: "docx-dot-leaders.docx", format: "docx", firmName: "Example Consulting LLC", clientName: "Umbrella Test Holdings Inc.",
       description: "DOCX; UK-style 'SIGNED by ......' execution clauses with dot leaders; party named on the line AFTER the signature line.",
       outcome: "fields",
-      blocks: [{ role: "client", page: "last", types: ["signature"] }, { role: "firm", page: "last", types: ["signature"] }],
+      blocks: [{ role: "client", page: "last", types: ["signature", "signature"] }, { role: "firm", page: "last", types: ["signature", "signature"] }],
       signatures: [{ role: "client", page: "last" }, { role: "firm", page: "last" }],
       traps: ["Dot leaders, not underscores", "Role appears below the line ('for and on behalf of')", "Witness lines are not a party signer", "'electronic signature' appears in clause body text", "'DATED: .....' on page 1 is not a signer field"],
     },

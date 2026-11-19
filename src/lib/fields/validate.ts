@@ -1,4 +1,4 @@
-import type { FieldDef, RoleDef } from "./types";
+import { hasNoSigner, type FieldDef, type RoleDef } from "./types";
 
 /** Default signing parties: the client signs first, then the firm countersigns. */
 export const DEFAULT_ROLES: RoleDef[] = [
@@ -15,7 +15,7 @@ export function validateFields(fields: FieldDef[], roles: RoleDef[], pageCount: 
   const problems: string[] = [];
   const keys = new Set(roles.map((r) => r.key));
   for (const r of roles) if (!fields.some((f) => f.roleKey === r.key && f.type === "signature")) problems.push(`Add a signature field for the ${r.kind === "client" ? "client" : "firm"}.`);
-  const orphan = fields.filter((f) => f.type !== "firm_fill" && (!f.roleKey || !keys.has(f.roleKey)));
+  const orphan = fields.filter((f) => !hasNoSigner(f.type) && (!f.roleKey || !keys.has(f.roleKey)));
   if (orphan.length) problems.push(`${orphan.length} field${orphan.length > 1 ? "s are" : " is"} assigned to a signer who isn't on this template.`);
   if (fields.some((f) => f.page > pageCount)) problems.push("A field is on a page that doesn't exist.");
   return problems;

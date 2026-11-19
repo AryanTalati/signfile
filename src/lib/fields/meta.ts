@@ -11,9 +11,10 @@ export const FIELD_META: Record<FieldType, { label: string; short: string; w: nu
   text: { label: "Text", short: "Text", w: 160, h: 16, signerFills: true, hint: "Any text the signer types" },
   checkbox: { label: "Checkbox", short: "Box", w: 14, h: 14, signerFills: true, hint: "Signer ticks it" },
   firm_fill: { label: "Filled by you", short: "You", w: 140, h: 16, signerFills: false, hint: "You fill it when creating the File (fee, start date…)" },
+  agreement_date: { label: "Agreement date", short: "Agmt date", w: 110, h: 16, signerFills: false, hint: "Filled automatically with the date the last party signs" },
 };
 
-export const PALETTE: FieldType[] = ["signature", "initials", "date_signed", "full_name", "title", "company", "text", "checkbox", "firm_fill"];
+export const PALETTE: FieldType[] = ["signature", "initials", "date_signed", "full_name", "title", "company", "text", "checkbox", "firm_fill", "agreement_date"];
 
 /** Role colors (editor + signing page). */
 export const ROLE_COLORS: Record<string, { bg: string; border: string; text: string; chip: string }> = {

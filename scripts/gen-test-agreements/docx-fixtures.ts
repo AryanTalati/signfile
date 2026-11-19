@@ -136,3 +136,31 @@ export async function docxDotLeaders(firm: string, client: string) {
   });
   return Packer.toBuffer(doc);
 }
+
+/** Word document whose Effective Date was typed in as underlined text (no blank left). */
+export async function docxFilledDate(firm: string, client: string) {
+  const doc = new Document({
+    sections: [{
+      children: [
+        new Paragraph({ heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER, text: "Services Agreement" }),
+        new Paragraph({
+          spacing: { after: 200 },
+          children: [
+            new TextRun("This Services Agreement is made as of "),
+            new TextRun({ text: "October 22, 2026", underline: {} }),
+            new TextRun(` (the "Effective Date") by and between ${firm} (the "Provider") and ${client} (the "Client"). TEST DOCUMENT - NOT A REAL AGREEMENT.`),
+          ],
+        }),
+        ...clauseParas(4),
+        p("SIGNATURES", { bold: true, before: 300 }),
+        p(`CLIENT: ${client}`, { bold: true }),
+        p("Signature: ______________________________", { after: 60 }),
+        p("Name: _________________________________", { after: 300 }),
+        p(firm.toUpperCase(), { bold: true }),
+        p("Signature: ______________________________", { after: 60 }),
+        p("Name: _________________________________"),
+      ],
+    }],
+  });
+  return Packer.toBuffer(doc);
+}

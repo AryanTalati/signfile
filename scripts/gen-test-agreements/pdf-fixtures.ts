@@ -214,3 +214,48 @@ export async function pdfScanSource(firm: string, client: string) {
   }
   return w.doc.save();
 }
+
+/** A body-text line containing one or more blanks; optionally overlays a value on a blank (as DocuSign/Word fill-ins do). */
+function lineWithBlanks(w: Writer, parts: (string | { blank: string; fill?: string })[], size = 10.5) {
+  w.ensure(size * 2);
+  const text = parts.map((p) => (typeof p === "string" ? p : p.blank)).join("");
+  const y = w.y - size;
+  w.page.drawText(text, { x: w.margin, y, size, font: w.font });
+  let x = w.margin;
+  for (const p of parts) {
+    const s = typeof p === "string" ? p : p.blank;
+    if (typeof p !== "string" && p.fill) w.page.drawText(p.fill, { x: x + 4, y: y + 1.5, size: size - 0.5, font: w.font });
+    x += w.font.widthOfTextAtSize(s, size);
+  }
+  w.y -= size * 1.6;
+}
+
+/**
+ * Date blanks inside body text: 'made as of ____ (the "Effective Date")', 'Dated: ____',
+ * 'Signed this ___ day of ____, 2026'. With fill=true, each blank already has a value typed
+ * over it (DocuSign/Word-filled), and the client's printed name is filled in too.
+ */
+export async function pdfDateBlanks(firm: string, client: string, fill: boolean) {
+  const w = await Writer.create();
+  const B = (n: number, value?: string) => ({ blank: "_".repeat(n), fill: fill ? value : undefined });
+  w.para("MUTUAL NON-DISCLOSURE AGREEMENT", { size: 15, bold: true, align: "center", after: 12 });
+  lineWithBlanks(w, ["Dated: ", B(22, "November 20, 2026")]);
+  w.gap(6);
+  lineWithBlanks(w, ["This Mutual Non-Disclosure Agreement is made as of ", B(18, "10/22/2026"), ' (the "Effective Date")']);
+  w.para(`by and between ${firm} (the "Provider") and ${client} (the "Client"). TEST DOCUMENT - NOT A REAL AGREEMENT.`, { after: 10 });
+  clauses(w, 6);
+  w.newPage();
+  w.heading("SIGNATURES");
+  lineWithBlanks(w, ["Signed this ", B(8, "20th"), " day of ", B(16, "November"), ", 2026."]);
+  w.gap(18);
+  for (const [party, filledName] of [[`CLIENT: ${client}`, "Pat Example"], [firm.toUpperCase(), undefined]] as const) {
+    w.para(party, { bold: true, after: 16 });
+    lineWithBlanks(w, ["Signature: ", B(34)]);
+    w.gap(6);
+    lineWithBlanks(w, ["Name: ", B(38, filledName)]);
+    w.gap(6);
+    lineWithBlanks(w, ["Date: ", B(20)]);
+    w.gap(22);
+  }
+  return w.doc.save();
+}

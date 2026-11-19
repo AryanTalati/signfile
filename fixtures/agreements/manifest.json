@@ -1,5 +1,167 @@
 [
   {
+    "file": "pdf-date-blanks.pdf",
+    "format": "pdf",
+    "firmName": "Astra AI",
+    "clientName": "Initech Test Co.",
+    "description": "Empty date blanks in body text: 'made as of ____ (the \"Effective Date\")', 'Dated: ____', 'Signed this ___ day of ____, 2026'.",
+    "outcome": "fields",
+    "blocks": [
+      {
+        "role": "none",
+        "page": 1,
+        "types": [
+          "agreement_date",
+          "firm_fill"
+        ]
+      },
+      {
+        "role": "none",
+        "page": "last",
+        "types": [
+          "firm_fill"
+        ]
+      },
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "date_signed"
+        ]
+      },
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "date_signed"
+        ]
+      }
+    ],
+    "traps": [
+      "Effective Date blank -> 'Agreement date' (automatic); other date blanks -> 'Filled by you'",
+      "'Signed this ___ day of' is a date, not a signature line",
+      "Date fields are medium confidence and flagged for review"
+    ],
+    "check": {
+      "pages": 3,
+      "textChars": 3191,
+      "rotations": [
+        0,
+        0,
+        0
+      ],
+      "sizeKb": 4
+    }
+  },
+  {
+    "file": "pdf-prefilled-blanks.pdf",
+    "format": "pdf",
+    "firmName": "Astra AI",
+    "clientName": "Initech Test Co.",
+    "description": "Same document with values already typed over the blanks (DocuSign/Word-filled): dates and the client's printed name.",
+    "outcome": "fields",
+    "blocks": [
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "date_signed"
+        ]
+      },
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "date_signed"
+        ]
+      }
+    ],
+    "absent": [
+      {
+        "role": "none",
+        "page": 1,
+        "types": [
+          "agreement_date",
+          "firm_fill"
+        ]
+      },
+      {
+        "role": "none",
+        "page": "last",
+        "types": [
+          "agreement_date",
+          "firm_fill"
+        ]
+      },
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "full_name"
+        ]
+      }
+    ],
+    "traps": [
+      "A blank with text over it is filled: no field"
+    ],
+    "check": {
+      "pages": 3,
+      "textChars": 3241,
+      "rotations": [
+        0,
+        0,
+        0
+      ],
+      "sizeKb": 4
+    }
+  },
+  {
+    "file": "docx-filled-date.docx",
+    "format": "docx",
+    "firmName": "Astra AI",
+    "clientName": "Hooli Test Systems",
+    "description": "Word document where the Effective Date was typed in as underlined text.",
+    "outcome": "fields",
+    "blocks": [
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name"
+        ]
+      },
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name"
+        ]
+      }
+    ],
+    "absent": [
+      {
+        "role": "none",
+        "page": 1,
+        "types": [
+          "agreement_date",
+          "firm_fill"
+        ]
+      }
+    ],
+    "traps": [
+      "Underlined typed text renders as text on a line: filled, no field"
+    ]
+  },
+  {
     "file": "docx-table-blocks.docx",
     "format": "docx",
     "firmName": "Astra AI",
@@ -56,6 +218,7 @@
         "role": "client",
         "page": "last",
         "types": [
+          "signature",
           "signature"
         ]
       },
@@ -63,6 +226,7 @@
         "role": "firm",
         "page": "last",
         "types": [
+          "signature",
           "signature"
         ]
       }

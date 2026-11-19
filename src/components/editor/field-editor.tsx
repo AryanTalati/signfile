@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, ButtonLink, Card } from "@/components/ui";
 import { FIELD_META, PALETTE, ROLE_COLORS } from "@/lib/fields/meta";
-import { needsReview, type FieldDef, type FieldType } from "@/lib/fields/types";
+import { hasNoSigner, needsReview, type FieldDef, type FieldType } from "@/lib/fields/types";
 import { rolesFor, validateFields } from "@/lib/fields/validate";
 import { PdfPages, type DisplayPage } from "./pdf-pages";
 
@@ -189,7 +189,7 @@ export function FieldEditor(props: EditorProps) {
       w,
       h,
       type: armed,
-      roleKey: armed === "firm_fill" ? null : countersign ? lastRole : "client",
+      roleKey: hasNoSigner(armed) ? null : countersign ? lastRole : "client",
       label: meta.label,
       required: armed !== "checkbox" && armed !== "text",
       confidence: 1,
@@ -587,7 +587,7 @@ function Inspector({
               onChange({
                 type: t,
                 label: editableLabel && (t === "text" || t === "firm_fill" || t === "checkbox") ? f.label : FIELD_META[t].label,
-                roleKey: t === "firm_fill" ? null : (f.roleKey ?? "client"),
+                roleKey: hasNoSigner(t) ? null : (f.roleKey ?? "client"),
                 required: t !== "checkbox" && t !== "text",
                 ...(t === "firm_fill" && !f.firmFillKey ? { firmFillKey: `fill_${Date.now().toString(36)}` } : {}),
               })
@@ -599,7 +599,9 @@ function Inspector({
         ))}
       </div>
 
-      {f.type !== "firm_fill" ? (
+      {f.type === "agreement_date" ? (
+        <p className="mt-3 text-xs text-muted">Filled automatically with the date the last party signs. Nobody types it.</p>
+      ) : f.type !== "firm_fill" ? (
         <>
           <p className="mt-3 text-xs font-medium text-muted">Filled by</p>
           <div className="mt-1 grid grid-cols-2 gap-1" role="radiogroup" aria-label="Signer">

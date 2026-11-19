@@ -65,6 +65,9 @@ interface Blank {
   box?: Rect;
   /** A table cell border: a label below it belongs to the next row, not to this line. */
   cellEdge?: boolean;
+  /** Text right before/after a blank inside its phrase (for body-text date blanks). */
+  before?: string;
+  after?: string;
   label?: { text: string; how: "prefix" | "left" | "row" | "below" | "above" | "anchor" | "widget" };
   widgetKind?: string;
   widgetName?: string;
@@ -241,7 +244,7 @@ const xOverlap = (a1: number, a2: number, b1: number, b2: number) => Math.max(0,
 
 const BLANK_RE = /_{3,}|(?:\.[  ]?){8,}|…{3,}/g;
 
-function textBlanks(phrases: Phrase[]): Blank[] {
+function textBlanks(phrases: Phrase[], items: TextItem[]): Blank[] {
   const out: Blank[] = [];
   for (const ph of phrases) {
     let prevEnd = 0;
@@ -253,17 +256,56 @@ function textBlanks(phrases: Phrase[]): Blank[] {
       const prefix = ph.text.slice(prevEnd, start).trim();
       prevEnd = end;
       if (x2 - x1 < 18) continue;
-      out.push({
+      const b: Blank = {
         page: ph.page,
         x1,
         x2,
         bottom: ph.baseline + 1,
         kind: m[0].includes("_") ? "underscore" : "dots",
         label: prefix ? { text: prefix, how: "prefix" } : undefined,
-      });
+        before: ph.text.slice(Math.max(0, start - 60), start),
+        after: ph.text.slice(end, end + 60),
+      };
+      if (isFilled(b, items)) continue;
+      out.push(b);
     }
   }
   return out;
+}
+
+/**
+ * A blank with text already printed over it (a DocuSign- or Word-filled value
+ * typed on the line) is filled: it must not become a field. "Over" = a separate
+ * text item, not itself blank characters, covering a meaningful part of the
+ * blank at about the same baseline.
+ */
+function isFilled(b: Blank, items: TextItem[]): boolean {
+  return items.some((it) => {
+    const t = it.str.trim();
+    if (!t || new RegExp(BLANK_RE.source).test(it.str) || /^[_.\s…]+$/.test(t)) return false;
+    // Filled-in values sit on the line (within a few points); the previous line of text is ~12+ pt above.
+    if (it.baseline < b.bottom - 7 || it.baseline > b.bottom + 4) return false;
+    const ov = xOverlap(it.x, it.x + it.w, b.x1, b.x2);
+    return ov > Math.min(15, 0.3 * (b.x2 - b.x1));
+  });
+}
+
+function nearSignatureLabel(b: Blank, phrases: Phrase[]) {
+  return phrases.some((p) => p.page === b.page && Math.abs(p.baseline - b.bottom) < 200 && /\b(signature|signed|sign here|signatory)\b|^by\s*:/i.test(p.text));
+}
+
+// Body-text date blanks: 'made as of ____ (the "Effective Date")', 'Dated: ____', 'this __ day of ____'.
+const DATE_BEFORE = /\b(as of|dated|date of|effective date|effective as of|entered into on|made on|executed on|signed on|this)\s*[:,]?\s*(the\s*)?$/i;
+const DATE_AFTER = /^\s*,?\s*(\(\s*(the|hereinafter)?\s*["“]?effective date|day of\b)/i;
+
+function dateBlankType(b: Blank): FieldType | null {
+  if (b.kind !== "underscore" && b.kind !== "dots") return null;
+  const before = (b.before ?? "").replace(/_{2,}|(?:\.[ \u00a0]?){8,}/g, " ");
+  const after = b.after ?? "";
+  const thisDayOf = /\bthis\s*$/i.test(before) && /^\s*day of\b/i.test(after);
+  if (/^\s*(dated?|date)\s*:?\s*$/i.test(before.trim().split(/[.;]/).pop() ?? "")) return /effective date/i.test(before + " " + after) ? "agreement_date" : "firm_fill";
+  if (!DATE_AFTER.test(after) && !(DATE_BEFORE.test(before) && !/\bthis\s*$/i.test(before)) && !thisDayOf) return null;
+  return /effective date/i.test(before + " " + after) ? "agreement_date" : "firm_fill";
 }
 
 /** Splits horizontal lines where vertical lines cross them (table cells). */
@@ -517,6 +559,7 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
   const pm = buildPartyMap(pages, opts.firmName);
   const phrasesByPage = new Map<number, Phrase[]>();
   let cands: Candidate[] = [];
+  const systemFields: Candidate[] = [];
   let witness = 0;
 
   for (const page of pages) {
@@ -553,12 +596,47 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
       });
     }
 
-    const text = textBlanks(phrases);
+    const text = textBlanks(phrases, page.items);
     // Drop drawn lines that sit under an underscore run (Word draws both).
     const lines = lineBlanks(page, phrases).filter((l) => !text.some((t) => Math.abs(t.bottom - l.bottom) < 6 && xOverlap(t.x1, t.x2, l.x1, l.x2) > 0.5 * (l.x2 - l.x1)));
     const boxes = boxBlanks(page, phrases).filter((b) => !page.widgets.some((w) => xOverlap(w.x, w.x + w.w, b.x1, b.x2) > 0 && Math.abs(w.y + w.h - b.bottom) < 6));
     const blanks = [...text, ...lines, ...boxes];
     stats.blanks += blanks.length;
+    // Body-text date blanks (no signer): handled separately from signature blocks.
+    const dateBlanks = new Set<Blank>();
+    for (let k = 0; k < text.length; k++) {
+      const b = text[k];
+      const type = dateBlankType(b);
+      if (!type) continue;
+      const lab = b.label && classify(b.label.text);
+      // Strong date wording ("this ___ day of", "___ (the "Effective Date")") wins over a label
+      // ("Signed this ___ day of"). Otherwise a real field label wins ("Name: ___"), and
+      // "Date: ___" only counts as the agreement's date outside a signature block.
+      const strong = DATE_AFTER.test(b.after ?? "");
+      if (!strong && lab && (lab.kind !== "date" || nearSignatureLabel(b, phrases))) continue;
+      dateBlanks.add(b);
+      let x2 = b.x2;
+      // "this ___ day of ______, 2026": one field spanning both blanks.
+      const next = text[k + 1];
+      if (next && /^\s*day of\b/i.test(b.after ?? "") && next.page === b.page && Math.abs(next.bottom - b.bottom) < 3) {
+        dateBlanks.add(next);
+        x2 = next.x2;
+        k++;
+      }
+      const w = Math.min(Math.max(x2 - b.x1, 70), 220);
+      systemFields.push({
+        page: page.page,
+        x: b.x1,
+        y: b.bottom - 15,
+        w,
+        h: 15,
+        type,
+        label: type === "agreement_date" ? "Agreement date" : "Date",
+        typeConf: 0.6,
+        blank: { ...b, label: { text: (b.before ?? "").trim().split(/\s+/).slice(-4).join(" ") || "date", how: "prefix" } },
+      });
+    }
+    for (const b of dateBlanks) blanks.splice(blanks.indexOf(b), 1);
     attachLabels(blanks, phrases);
 
     const used = new Set<Phrase>();
@@ -638,6 +716,7 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
   cands = cands.filter((c) => ["signature", "initials", "checkbox"].includes(c.type) || sigSides.has(`${c.page}:${c.roleHint!.side}`));
 
   cands.sort((a, b) => a.page - b.page || a.y - b.y || a.x - b.x);
+  const sysOut = systemFields.filter((d) => !cands.some((c) => c.page === d.page && xOverlap(c.x, c.x + c.w, d.x, d.x + d.w) > 0 && Math.abs(c.y - d.y) < 10));
 
   // Two signatures for the same party in one block is unusual (UK "SIGNED by ... / Director ..."): keep both, flag the weaker.
   const reviewNote = new Map<Candidate, string>();
@@ -668,6 +747,28 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
       reason: `${c.blank.kind}${c.blank.label ? ` + ${c.blank.label.how} label` : ""}; ${c.roleHint!.why}${reviewNote.has(c) ? `; ${reviewNote.get(c)}` : ""}`,
     } satisfies FieldDef;
   });
+
+  const pgOf = (n: number) => byPage.get(n)!;
+  for (const d of sysOut) {
+    const pg = pgOf(d.page);
+    fields.push({
+      id: `d${fields.length + 1}`,
+      page: d.page,
+      x: clamp01(d.x / pg.width),
+      y: clamp01(d.y / pg.height),
+      w: clamp01(d.w / pg.width),
+      h: clamp01(d.h / pg.height),
+      type: d.type,
+      roleKey: null,
+      label: d.label,
+      required: true,
+      confidence: d.typeConf,
+      source: "rule",
+      reason: `empty blank in body text next to "${d.blank.label?.text}"; ${d.type === "agreement_date" ? "mentions the Effective Date, so it's filled automatically when the last party signs" : "a date you fill in when creating the File"}; check it`,
+      ...(d.type === "firm_fill" ? { firmFillKey: "date" } : {}),
+    });
+  }
+  fields.sort((a, b) => a.page - b.page || a.y - b.y || a.x - b.x);
 
   for (const side of ["client", "firm"] as Side[]) {
     if (fields.some((f) => f.roleKey === side) && !fields.some((f) => f.roleKey === side && f.type === "signature"))
