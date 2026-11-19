@@ -22,7 +22,8 @@ const button = (brand: Brand, href: string, label: string) =>
 
 export function signRequestEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string; link: string; expiresAt: Date; senderName: string; countersign: boolean }) {
   const subject = `${o.brand.name}: please sign "${o.documentName}"`;
-  const exp = o.expiresAt.toUTCString().slice(0, 16);
+  // Date only, labelled UTC (the email can't know the reader's time zone).
+  const exp = `${o.expiresAt.toLocaleDateString("en-US", { dateStyle: "long", timeZone: "UTC" })} (UTC)`;
   const html = layout(
     o.brand,
     `<p>Hi ${esc(o.recipientName.split(" ")[0])},</p>
