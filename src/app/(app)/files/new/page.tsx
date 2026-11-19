@@ -3,6 +3,8 @@ import { ButtonLink, Card } from "@/components/ui";
 import { requireAuth } from "@/lib/auth/session";
 import { validateFields } from "@/lib/fields/validate";
 import { listCountersigners } from "@/lib/files/service";
+import { isFirmFirst } from "@/lib/fields/validate";
+import { getSavedSignature } from "@/lib/users/signature";
 import { getTemplate, listTemplates } from "@/lib/templates/service";
 import { NewFileForm } from "./new-file-form";
 
@@ -23,7 +25,7 @@ export default async function NewFilePage({ searchParams }: { searchParams: Prom
       </Card>
     );
   const selectedId = wanted && templates.some((t) => t.id === wanted) ? wanted : templates[0].id;
-  const [t, team] = await Promise.all([getTemplate(auth, selectedId), listCountersigners(auth)]);
+  const [t, team, saved] = await Promise.all([getTemplate(auth, selectedId), listCountersigners(auth), getSavedSignature(auth.user.id)]);
   const v = t!.version;
   const problems = validateFields(v.fields, v.roles ?? [], v.pageCount);
   const firmFill = v.fields
@@ -43,6 +45,8 @@ export default async function NewFilePage({ searchParams }: { searchParams: Prom
         problems={problems}
         firmFill={firmFill}
         countersign={countersign}
+        firmFirst={isFirmFirst(v.roles)}
+        mySavedSignature={saved?.signature ?? null}
         team={team}
         defaultCountersignerId={auth.user.id}
       />

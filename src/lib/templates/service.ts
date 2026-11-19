@@ -189,6 +189,8 @@ export const saveSchema = z.object({
   pdfSha256: z.string().length(64).optional(),
   name: z.string().trim().min(1).max(120),
   countersign: z.boolean(),
+  /** "Firm signs when sending" (firm first) vs "Firm countersigns after the client". */
+  firmFirst: z.boolean().optional().default(false),
   fields: z.array(fieldSchema).max(500),
 });
 
@@ -198,7 +200,7 @@ export async function saveTemplate(auth: AuthContext, templateId: string, input:
   const t = await getTemplate(auth, templateId);
   if (!t) return null;
   if (input.pdfSha256 && input.pdfSha256 !== t.version.pdfSha256) return { stale: true as const };
-  const roles = rolesFor(input.countersign);
+  const roles = rolesFor(input.countersign, input.firmFirst);
   const fields: FieldDef[] = input.fields
     .filter((f) => f.page <= t.version.pageCount)
     .map((f) => ({ ...f, x: Math.min(f.x, 1 - f.w), y: Math.min(f.y, 1 - f.h), roleKey: hasNoSigner(f.type) ? null : f.roleKey }));

@@ -59,7 +59,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 {f.templateName ?? "Agreement"}
                 {f.reference ? ` · ${f.reference}` : ""}
               </span>
-              <FileStatus status={f.status} />
+              <FileStatus status={f.status} waitingOn={f.waitingOn} />
             </Link>
           ))}
         </Card>

@@ -124,7 +124,7 @@ test("Scanned PDF: place fields by hand", async ({ page }) => {
   await expect(page.getByTestId("problems")).toContainText("signature field for the firm");
   // Firm doesn't need to countersign: turn it off and it's ready.
   page.once("dialog", (d) => d.accept());
-  await page.getByLabel("Firm countersigns after the client").uncheck();
+  await page.getByLabel("Firm signs too").uncheck();
   await expect(page.getByTestId("ready")).toBeVisible({ timeout: 15_000 });
 });
 

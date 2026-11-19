@@ -28,6 +28,7 @@ export async function createFileAction(_: CreateFileState, fd: FormData): Promis
     signerTitle: values.signerTitle,
     signerEmail: values.signerEmail,
     countersignerId: values.countersignerId || undefined,
+    signNow: values.signNow === "on",
     firmValues,
   });
   if (!parsed.success) {
@@ -36,12 +37,13 @@ export async function createFileAction(_: CreateFileState, fd: FormData): Promis
     return { fieldErrors, values };
   }
   let fileId: string;
+  let signNowError: string | null = null;
   try {
-    ({ fileId } = await createAndSendFile(auth, parsed.data, await appUrl()));
+    ({ fileId, signNowError } = await createAndSendFile(auth, parsed.data, await appUrl()));
   } catch (e) {
     if (e instanceof FileInputError) return e.field ? { fieldErrors: { [e.field]: e.message }, values } : { error: e.message, values };
     console.error("create file failed", e);
     return { error: "Something went wrong sending this File. Please try again.", values };
   }
-  redirect(`/files/${fileId}?sent=1`);
+  redirect(`/files/${fileId}?sent=1${signNowError ? `&signNowError=${encodeURIComponent(signNowError)}` : ""}`);
 }

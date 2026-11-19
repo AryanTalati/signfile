@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { FieldEditor } from "@/components/editor/field-editor";
 import { requireAuth } from "@/lib/auth/session";
 import { getTemplate } from "@/lib/templates/service";
+import { isFirmFirst } from "@/lib/fields/validate";
 
 export const metadata: Metadata = { title: "Set up fields · signfile" };
 
@@ -25,6 +26,7 @@ export default async function TemplateEditorPage({ params, searchParams }: { par
       pages={pages}
       initialFields={v.fields}
       initialCountersign={(v.roles ?? []).some((r) => r.kind === "firm")}
+      initialFirmFirst={isFirmFirst(v.roles)}
       signaturePageAppended={v.signaturePageAppended}
       detection={v.detection as { outcome?: string; warnings?: string[]; notes?: string[] } | null}
       firmName={auth.company.name}

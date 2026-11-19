@@ -6,9 +6,25 @@ export const DEFAULT_ROLES: RoleDef[] = [
   { key: "firm", label: "Firm (countersign)", order: 2, kind: "firm" },
 ];
 
-export function rolesFor(countersign: boolean): RoleDef[] {
-  return countersign ? DEFAULT_ROLES : DEFAULT_ROLES.filter((r) => r.kind === "client");
+/**
+ * Signers for a template. countersign=false: client only. firmFirst=true ("Firm signs when
+ * sending"): the firm signs first (order 1), the client last, so the File completes when the
+ * client signs. Otherwise the client signs first and the firm countersigns.
+ */
+export function rolesFor(countersign: boolean, firmFirst = false): RoleDef[] {
+  if (!countersign) return DEFAULT_ROLES.filter((r) => r.kind === "client");
+  if (!firmFirst) return DEFAULT_ROLES;
+  return [
+    { key: "firm", label: "Firm (signs when sending)", order: 1, kind: "firm" },
+    { key: "client", label: "Client", order: 2, kind: "client" },
+  ];
 }
+
+export const isFirmFirst = (roles: RoleDef[] | null | undefined) => {
+  const firm = roles?.find((r) => r.kind === "firm");
+  const client = roles?.find((r) => r.kind === "client");
+  return !!firm && !!client && firm.order < client.order;
+};
 
 /** Problems that block sending. Pure: used by the editor (live) and the server (on save/send). */
 export function validateFields(fields: FieldDef[], roles: RoleDef[], pageCount: number): string[] {

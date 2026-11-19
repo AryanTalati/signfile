@@ -1,11 +1,12 @@
 import "server-only";
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AuthContext } from "@/lib/auth/session";
 import { requestMeta } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
-import { signRequestEmail } from "@/lib/email/templates";
+import { firmSignFirstEmail, signRequestEmail } from "@/lib/email/templates";
+import { isFirmFirst } from "@/lib/fields/validate";
 import { recordEmail } from "@/lib/email/outbox";
 import { validateFields } from "@/lib/fields/validate";
 import { getTemplate } from "@/lib/templates/service";
@@ -27,6 +28,8 @@ export const createFileSchema = z.object({
   signerTitle: z.string().trim().max(120).optional().default(""),
   signerEmail: z.string().trim().toLowerCase().email("Enter a valid email."),
   countersignerId: z.string().uuid().optional(),
+  /** "Firm signs when sending": the sender (as the firm signer) signs now with their saved signature. */
+  signNow: z.boolean().optional().default(false),
   firmValues: z.record(z.string(), z.string().trim().max(500)).default({}),
 });
 export type CreateFileInput = z.infer<typeof createFileSchema>;
@@ -96,6 +99,9 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
   const clientRole = roles.find((r) => r.kind === "client") ?? roles[0];
   const firmRole = roles.find((r) => r.kind === "firm");
   const clientToken = newToken();
+  const firmToken = newToken();
+  const firmFirst = isFirmFirst(roles) && !!countersigner;
+  if (firmFirst && input.signNow && countersigner?.id !== auth.user.id) throw new FileInputError("Only the person signing for your firm can sign now. Choose yourself, or let them sign first.", "countersignerId");
   const { ip, userAgent } = await requestMeta();
   const actor = { actorType: "user", actorId: auth.user.id, actorLabel: auth.user.name, ip, userAgent } as const;
 
@@ -141,7 +147,7 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
         title: input.signerTitle || null,
         email: input.signerEmail,
         token: clientToken,
-        status: "active",
+        status: firmFirst ? "waiting" : "active",
       })
       .returning({ id: schema.recipients.id });
     let firmRecipientId: string | null = null;
@@ -158,8 +164,8 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
           name: countersigner.name,
           title: countersigner.title,
           email: countersigner.email,
-          token: newToken(),
-          status: "waiting",
+          token: firmToken,
+          status: firmFirst ? "active" : "waiting",
         })
         .returning({ id: schema.recipients.id });
       firmRecipientId = firm.id;
@@ -191,28 +197,41 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
       },
     ]);
 
-    const email = signRequestEmail({
-      brand: { name: auth.company.name, color: company?.brandColor ?? auth.company.brandColor },
-      recipientName: input.signerName,
-      documentName: t.template.name,
-      clientLegalName: input.clientLegalName,
-      link: signLink(baseUrl, clientToken),
-      expiresAt,
-      senderName: auth.user.name,
-      countersign,
-    });
-    await recordEmail(tx, {
-      companyId: auth.company.id,
-      fileId,
-      recipientId: client.id,
-      kind: "sign_request",
-      toEmail: input.signerEmail,
-      toName: input.signerName,
-      ...email,
-    });
+    const brand = { name: auth.company.name, color: company?.brandColor ?? auth.company.brandColor };
+    if (!firmFirst) {
+      const email = signRequestEmail({
+        brand,
+        recipientName: input.signerName,
+        documentName: t.template.name,
+        clientLegalName: input.clientLegalName,
+        link: signLink(baseUrl, clientToken),
+        expiresAt,
+        senderName: auth.user.name,
+        countersign,
+      });
+      await recordEmail(tx, { companyId: auth.company.id, fileId, recipientId: client.id, kind: "sign_request", toEmail: input.signerEmail, toName: input.signerName, ...email });
+    } else if (!input.signNow && countersigner && firmRecipientId) {
+      // The firm signs first; the client is emailed once they have.
+      const email = firmSignFirstEmail({ brand, recipientName: countersigner.name, documentName: t.template.name, clientLegalName: input.clientLegalName, link: signLink(baseUrl, firmToken) });
+      await recordEmail(tx, { companyId: auth.company.id, fileId, recipientId: firmRecipientId, kind: "firm_sign_first", toEmail: countersigner.email, toName: countersigner.name, ...email });
+    }
   });
 
-  return { fileId };
+  // "Firm signs when sending": the sender signs now with their saved signature (their own consent
+  // and signing events). If that can't complete, the File simply waits for them to sign.
+  let signNowError: string | null = null;
+  if (firmFirst && input.signNow) {
+    const { getSavedSignature } = await import("@/lib/users/signature");
+    const { loadSigning, quickSign } = await import("./signing");
+    const saved = await getSavedSignature(auth.user.id);
+    const ctx = await loadSigning(firmToken);
+    if (!saved) signNowError = "You don't have a saved signature yet. Sign from the File page.";
+    else if (ctx)
+      await quickSign(ctx, { id: auth.user.id, title: auth.user.title }, saved, await requestMeta(), baseUrl).catch((e: Error) => {
+        signNowError = e.message;
+      });
+  }
+  return { fileId, signNowError };
 }
 
 async function defaultCountersignerId(auth: AuthContext) {
@@ -247,6 +266,7 @@ export async function listFiles(auth: AuthContext) {
       sentAt: schema.files.sentAt,
       updatedAt: schema.files.updatedAt,
       templateName: schema.templates.name,
+      waitingOn: sql<string | null>`(select r.role_key from recipients r where r.file_id = ${schema.files.id} and r.document_id = ${schema.files.currentDocumentId} and r.status in ('active','viewed') order by r.signing_order limit 1)`,
     })
     .from(schema.files)
     .leftJoin(schema.templates, eq(schema.templates.id, schema.files.templateId))

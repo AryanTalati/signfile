@@ -34,6 +34,18 @@ ${button(o.brand, o.link, "Review and sign")}
   return { subject, html, text };
 }
 
+export function firmSignFirstEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string; link: string }) {
+  const subject = `Sign to send: "${o.documentName}" for ${o.clientLegalName}`;
+  const html = layout(
+    o.brand,
+    `<p>Hi ${esc(o.recipientName.split(" ")[0])},</p>
+<p><strong>${esc(o.documentName)}</strong> for <strong>${esc(o.clientLegalName)}</strong> is ready. Your firm signs first; it goes to the client as soon as you sign.</p>
+${button(o.brand, o.link, "Review and sign")}`,
+  );
+  const text = `"${o.documentName}" for ${o.clientLegalName}: your firm signs first. Sign: ${o.link}`;
+  return { subject, html, text };
+}
+
 export function countersignRequestEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string; link: string }) {
   const subject = `Countersign: ${o.clientLegalName} signed "${o.documentName}"`;
   const html = layout(

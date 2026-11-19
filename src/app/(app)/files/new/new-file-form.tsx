@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Alert, Button, Card, Field } from "@/components/ui";
 import { createFileAction, type CreateFileState } from "../actions";
 
@@ -12,6 +12,8 @@ export function NewFileForm(props: {
   problems: string[];
   firmFill: { key: string; label: string; required: boolean }[];
   countersign: boolean;
+  firmFirst: boolean;
+  mySavedSignature: string | null;
   team: { id: string; name: string; title: string | null; email: string }[];
   defaultCountersignerId: string;
 }) {
@@ -20,6 +22,8 @@ export function NewFileForm(props: {
   const fe = state.fieldErrors ?? {};
   const v = state.values ?? {};
   const blocked = props.problems.length > 0;
+  const [signer, setSigner] = useState(v.countersignerId ?? props.defaultCountersignerId);
+  const signerIsMe = signer === props.defaultCountersignerId;
 
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
@@ -82,12 +86,13 @@ export function NewFileForm(props: {
       {props.countersign && (
         <Card className="flex flex-col gap-1.5 p-5">
           <label htmlFor="countersignerId" className="font-semibold">
-            Countersigns for your firm
+            {props.firmFirst ? "Signs for your firm (before the client)" : "Countersigns for your firm"}
           </label>
           <select
             id="countersignerId"
             name="countersignerId"
-            defaultValue={v.countersignerId ?? props.defaultCountersignerId}
+            value={signer}
+            onChange={(e) => setSigner(e.target.value)}
             className="rounded-lg border border-border bg-surface px-3 py-2.5 text-base sm:text-sm"
           >
             {props.team.map((u) => (
@@ -97,7 +102,24 @@ export function NewFileForm(props: {
               </option>
             ))}
           </select>
-          <p className="text-sm text-muted">They get their link after the client signs.</p>
+          {!props.firmFirst && <p className="text-sm text-muted">They get their link after the client signs.</p>}
+          {props.firmFirst && signerIsMe && props.mySavedSignature && (
+            <label className="mt-2 flex items-start gap-3 rounded-lg border border-border p-3 text-sm" data-testid="sign-now">
+              <input type="checkbox" name="signNow" defaultChecked className="mt-1" />
+              <span>
+                <span className="font-medium">Sign now with my saved signature</span>
+                {/* eslint-disable-next-line @next/next/no-img-element -- data URL */}
+                <img src={props.mySavedSignature} alt="Your saved signature" className="mt-1 block h-8 max-w-48 object-contain object-left" />
+                <span className="block text-xs text-muted">I agree to sign this agreement electronically now. The client gets it as soon as you send.</span>
+              </span>
+            </label>
+          )}
+          {props.firmFirst && signerIsMe && !props.mySavedSignature && (
+            <p className="text-sm text-muted">
+              You sign first, then it goes to the client. Save your signature in <Link href="/settings" className="underline">Settings</Link> to sign while sending.
+            </p>
+          )}
+          {props.firmFirst && !signerIsMe && <p className="text-sm text-muted">They sign first; the client gets it once they have.</p>}
           {fe.countersignerId && <p className="text-sm text-red-600">{fe.countersignerId}</p>}
         </Card>
       )}

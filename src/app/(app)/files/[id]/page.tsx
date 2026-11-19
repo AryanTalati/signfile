@@ -28,10 +28,10 @@ const RECIPIENT_STATUS: Record<string, string> = {
 
 const fmt = (d: Date | null) => (d ? d.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }) + " UTC" : "");
 
-export default async function FilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ sent?: string }> }) {
+export default async function FilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ sent?: string; signNowError?: string }> }) {
   const auth = await requireAuth();
   const { id } = await params;
-  const { sent } = await searchParams;
+  const { sent, signNowError } = await searchParams;
   const data = await getFile(auth, id);
   if (!data) notFound();
   const { file, recipients, events, emails, templateName } = data;
@@ -46,7 +46,7 @@ export default async function FilePage({ params, searchParams }: { params: Promi
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold">{file.clientLegalName}</h1>
-          <FileStatus status={file.status} />
+          <FileStatus status={file.status} waitingOn={live[0]?.roleKey ?? null} />
         </div>
         <p className="mt-1 text-sm text-muted">
           {templateName}
@@ -54,7 +54,8 @@ export default async function FilePage({ params, searchParams }: { params: Promi
         </p>
       </div>
 
-      {sent && live[0] && (
+      {signNowError && <Alert>Couldn&apos;t sign while sending: {signNowError}</Alert>}
+      {sent && live[0] && live[0].userId !== auth.user.id && (
         <Alert tone="success">
           <p className="font-medium">Sent. Share this link with {live[0].name}:</p>
           <div className="mt-2">

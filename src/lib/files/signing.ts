@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db/client";
-import { countersignRequestEmail } from "@/lib/email/templates";
+import { countersignRequestEmail, signRequestEmail } from "@/lib/email/templates";
 import { recordEmail } from "@/lib/email/outbox";
 import type { FieldDef } from "@/lib/fields/types";
 import { hasNoSigner } from "@/lib/fields/types";
@@ -249,14 +249,23 @@ export async function submitSigning(
         data: { name: next.name, email: next.email, role: next.roleKey },
       });
       const [t] = ctx.file.templateId ? await tx.select({ name: schema.templates.name }).from(schema.templates).where(eq(schema.templates.id, ctx.file.templateId)) : [];
-      const email = countersignRequestEmail({
-        brand: { name: ctx.company.name, color: ctx.company.brandColor },
-        recipientName: next.name,
-        documentName: t?.name ?? "the agreement",
-        clientLegalName: ctx.file.clientLegalName,
-        link: signLink(baseUrl, next.token),
-      });
-      await recordEmail(tx, { companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: next.id, kind: "countersign_request", toEmail: next.email, toName: next.name, ...email });
+      const brand = { name: ctx.company.name, color: ctx.company.brandColor };
+      const docName = t?.name ?? "the agreement";
+      // The firm countersigns after the client; the client signs after the firm ("firm signs when sending").
+      const isFirm = next.userId !== null;
+      const email = isFirm
+        ? countersignRequestEmail({ brand, recipientName: next.name, documentName: docName, clientLegalName: ctx.file.clientLegalName, link: signLink(baseUrl, next.token) })
+        : signRequestEmail({
+            brand,
+            recipientName: next.name,
+            documentName: docName,
+            clientLegalName: ctx.file.clientLegalName,
+            link: signLink(baseUrl, next.token),
+            expiresAt: ctx.file.expiresAt ?? new Date(Date.now() + 30 * 86_400_000),
+            senderName: ctx.company.name,
+            countersign: false,
+          });
+      await recordEmail(tx, { companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: next.id, kind: isFirm ? "countersign_request" : "sign_request", toEmail: next.email, toName: next.name, ...email });
       return { completed: false, nextName: next.name };
     }
 

@@ -95,3 +95,23 @@ export async function expectNoPlaceholdersInDocument(page: Page) {
   const texts = await page.locator("[data-page]").allInnerTexts();
   for (const t of texts) for (const re of PLACEHOLDER_HINTS) expect(t, `placeholder text in document: ${re}`).not.toMatch(re);
 }
+
+/** Settings: save title + a typed signature/initials for one-click signing. */
+export async function saveMySignature(page: Page, title = "Managing Partner") {
+  await page.goto("/settings");
+  await page.getByLabel("Your title").fill(title);
+  await page.getByRole("button", { name: "Save details" }).click();
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Set up my signature" }).click();
+  await page.getByRole("button", { name: "Adopt and sign" }).click();
+  await page.getByRole("button", { name: "Adopt and sign" }).click();
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Save my signature" }).click();
+  await expect(page.getByAltText("Your saved signature")).toBeVisible();
+}
+
+/** Template editor: switch to "Firm signs when sending" and wait for the save. */
+export async function setFirmSignsFirst(page: Page) {
+  await page.getByRole("radio", { name: /Firm signs when sending/ }).check();
+  await expect(page.getByTestId("save-state")).toHaveText("All changes saved", { timeout: 15_000 });
+}
