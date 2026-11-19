@@ -82,6 +82,8 @@ interface Candidate {
   h: number;
   typeConf: number;
   roleHint?: { side: Side; conf: number; why: string };
+  /** Short upper-case heading above the block ("INVESTOR:", "[COMPANY]") when no known party word matched. */
+  partyHeading?: { text: string; x: number; y: number };
   blank: Blank;
 }
 
@@ -327,6 +329,8 @@ function boxBlanks(page: PageLayout, phrases: Phrase[]): Blank[] {
 
 /** Attaches a label to blanks that don't have one from their own phrase. */
 function attachLabels(blanks: Blank[], phrases: Phrase[]) {
+  // "Email: ____": a label with its own blank right after it on the same row labels only that blank.
+  const ownsRowBlank = (p: Phrase) => blanks.some((o) => o.x1 >= p.x2 - 2 && o.x1 - p.x2 < 40 && Math.abs(o.bottom - p.baseline) < 8);
   for (const b of blanks) {
     if (b.label && classify(b.label.text)) continue;
     const prefix = b.label;
@@ -345,7 +349,7 @@ function attachLabels(blanks: Blank[], phrases: Phrase[]) {
     const below = phrases
       .filter((p) => p.y >= b.bottom - 1 && p.y <= b.bottom + 16 && xOverlap(p.x, p.x2, b.x1, b.x2) > 0 && p.x >= b.x1 - 10)
       .sort((a, z) => a.y - z.y)[0];
-    if (below && !b.cellEdge && classify(below.text)) {
+    if (below && !b.cellEdge && !ownsRowBlank(below) && classify(below.text)) {
       b.label = { text: below.text, how: "below" };
       continue;
     }
@@ -460,14 +464,34 @@ function assignRoles(cands: Candidate[], phrasesByPage: Map<number, Phrase[]>, p
       if (p.x > c.x + c.w) continue; // headings to the right belong to another column
       const ms = markerSide(p.text, pm);
       if (!ms) continue;
-      if (ms.conf < 0.85 && classify(p.text)) continue; // "Company:" is a field label, not a party heading
+      if (ms.conf < 0.85 && /:\s*$/.test(p.text) && classify(p.text)) continue; // "Company:" is a field label; "[COMPANY]" is a heading
       const overlap = xOverlap(p.x, p.x2, c.x - 10, c.x + c.w);
       const hPenalty = overlap > 0 ? 0 : Math.max(0, c.x - p.x2) * 0.3;
       const score = Math.max(0, c.y - p.baseline) + hPenalty;
       if (!best || score < best.score) best = { score, hint: { ...ms, conf: ms.conf - (overlap > 0 ? 0 : 0.05), why: `heading: ${ms.why}` } };
     }
-    if (best) c.roleHint = best.hint;
+    // r3: an unnamed party heading ("INVESTOR:") directly above the block in the same column.
+    // A closer unnamed heading ends the previous party's block, so it beats a known party word further up.
+    const head = phrases
+      .filter((p) => p.baseline <= c.y + 2 && c.y - p.baseline < 160 && p.x <= c.x + c.w && xOverlap(p.x, p.x2 + 200, c.x - 10, c.x + c.w) > 0 && isPartyHeading(p.text))
+      .sort((a, b) => b.baseline - a.baseline)[0];
+    const headIsCloser = head && !markerSide(head.text, pm) && (!best || c.y - head.baseline < best.score);
+    if (best && !headIsCloser) {
+      c.roleHint = best.hint;
+      continue;
+    }
+    if (head) c.partyHeading = { text: head.text, x: head.x, y: head.baseline };
   }
+}
+
+/** "INVESTOR:", "[COMPANY]", "THE PURCHASER" - short and upper-case, not a field label with a colon. */
+function isPartyHeading(text: string) {
+  const t = text.replace(/[\[\]():]/g, "").trim();
+  const letters = t.replace(/[^A-Za-z]/g, "");
+  if (letters.length < 3 || t.split(/\s+/).length > 5) return false;
+  if ((letters.match(/[A-Z]/g)?.length ?? 0) / letters.length < 0.8) return false;
+  const c = classify(text);
+  return !c || (c.kind === "company" && !/:\s*$/.test(text));
 }
 
 function dedupe(cands: Candidate[]): Candidate[] {
@@ -582,15 +606,28 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
 
   // Pass 5: roles.
   assignRoles(cands, phrasesByPage, pm);
-  // Fields without a hint inherit from the nearest hinted field in the same block (same column, close vertically).
-  for (const c of cands.filter((x) => !x.roleHint)) {
-    const near = cands
-      .filter((o) => o.roleHint && o.page === c.page && xOverlap(o.x - 30, o.x + o.w + 30, c.x, c.x + c.w) > 0 && Math.abs(o.y - c.y) < 160)
+  // Unnamed party headings: each distinct heading is one party. If one side is already known,
+  // they're the other side; if none is, first block = client, second = firm (flagged for review).
+  const sidesSeen = new Set(cands.filter((c) => c.roleHint).map((c) => c.roleHint!.side));
+  const headings = [...new Map(cands.filter((c) => !c.roleHint && c.partyHeading).map((c) => [`${c.page}:${c.partyHeading!.text}`, c.partyHeading!])).entries()].sort(
+    (a, b) => a[1].y - b[1].y || a[1].x - b[1].x,
+  );
+  const headingSide = new Map<string, { side: Side; conf: number; why: string }>();
+  headings.forEach(([key, h], i) => {
+    if (sidesSeen.size === 1) headingSide.set(key, { side: sidesSeen.has("firm") ? "client" : "firm", conf: 0.65, why: `heading "${h.text}" (the other party)` });
+    else if (sidesSeen.size === 0 && headings.length >= 2) headingSide.set(key, { side: i === 0 ? "client" : "firm", conf: 0.5, why: `heading "${h.text}" (${i === 0 ? "first" : "second"} party; check)` });
+    else headingSide.set(key, { side: "client", conf: 0.45, why: `heading "${h.text}"` });
+  });
+  for (const c of cands.filter((x) => !x.roleHint && x.partyHeading)) c.roleHint = headingSide.get(`${c.page}:${c.partyHeading!.text}`);
+  // Fields without a hint inherit from the nearest field with direct evidence in the same block (no chaining).
+  const evidenced = cands.filter((x) => x.roleHint);
+  for (const c of cands.filter((x) => !x.roleHint && !x.partyHeading)) {
+    const near = evidenced
+      .filter((o) => o.page === c.page && xOverlap(o.x - 30, o.x + o.w + 30, c.x, c.x + c.w) > 0 && Math.abs(o.y - c.y) < 160)
       .sort((a, b) => Math.abs(a.y - c.y) - Math.abs(b.y - c.y))[0];
     if (near?.roleHint) c.roleHint = { ...near.roleHint, conf: near.roleHint.conf - 0.1, why: `same block as a ${near.type}` };
   }
-  // Complement: if only one side was ever identified, unknown blocks are the other side.
-  const sidesSeen = new Set(cands.filter((c) => c.roleHint).map((c) => c.roleHint!.side));
+  // Complement: if only one side was ever identified, remaining unknown fields are the other side.
   for (const c of cands.filter((x) => !x.roleHint)) {
     if (sidesSeen.size === 1) {
       const other: Side = sidesSeen.has("firm") ? "client" : "firm";
