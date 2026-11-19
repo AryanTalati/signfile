@@ -45,6 +45,10 @@ export function FieldEditor(props: EditorProps) {
   const latest = useRef({ name, countersign, fields });
   latest.current = { name, countersign, fields };
   const rev = useRef(0); // bumped on every edit
+  // What the server last confirmed. "Unsaved" is derived from this during render, so the
+  // badge never shows "saved" for a frame between an edit and the autosave effect.
+  const snapshot = (n: string, c: boolean, f: FieldDef[]) => JSON.stringify([n.trim() || "Untitled agreement", c, f]);
+  const confirmed = useRef(snapshot(props.initialName, props.initialCountersign, props.initialFields));
   const inFlight = useRef<Promise<void> | null>(null);
   const again = useRef(false);
 
@@ -96,6 +100,7 @@ export function FieldEditor(props: EditorProps) {
           if (res.status === 409) return router.refresh();
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error ?? "Save failed");
+          confirmed.current = snapshot(n, c, f);
           setSave({ state: rev.current === sent ? "saved" : "dirty" });
           if (rev.current !== sent) again.current = true;
         } catch (e) {
@@ -121,15 +126,17 @@ export function FieldEditor(props: EditorProps) {
     return () => clearTimeout(t);
   }, [fields, name, countersign, saveNow]);
 
+  const unsaved = snapshot(name, countersign, fields) !== confirmed.current;
+  const shownSave: Save = save.state === "error" || save.state === "saving" ? save : { state: unsaved ? "dirty" : "saved" };
   const problems = useMemo(() => validateFields(fields, rolesFor(countersign), props.pages.length), [fields, countersign, props.pages.length]);
 
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (save.state === "dirty" || save.state === "saving") e.preventDefault();
+      if (snapshot(latest.current.name, latest.current.countersign, latest.current.fields) !== confirmed.current) e.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [save.state]);
+  }, []);
 
   // ---- keyboard ----
   useEffect(() => {
@@ -275,7 +282,7 @@ export function FieldEditor(props: EditorProps) {
             onChange={(e) => setName(e.target.value)}
             className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 text-xl font-semibold hover:border-border focus:border-brand focus:bg-surface focus:outline-none"
           />
-          <SaveBadge save={save} onRetry={saveNow} />
+          <SaveBadge save={shownSave} onRetry={saveNow} />
         </div>
 
         {/* palette */}
