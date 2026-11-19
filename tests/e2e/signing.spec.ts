@@ -98,6 +98,9 @@ test("no placeholder text inside the document; real values appear once signed (b
   await c.getByRole("button", { name: /I agree/ }).click();
   for (const n of [1, 2, 3]) await c.locator(`[data-page="${n}"]`).scrollIntoViewIfNeeded();
   await expectNoPlaceholdersInDocument(c);
+  // Own date-signed field: a greyed, local-format preview of today's date (display only).
+  await expect(c.getByTestId("date-preview").first()).toHaveText(/^[A-Z][a-z]+ \d{1,2}, \d{4}$/);
+  await expect(c.locator('[data-testid="sign-field-date_signed"]').first()).toHaveAttribute("title", "Added automatically when you sign");
   await c.close();
   const c2 = await (await browser.newContext()).newPage();
   await signViaLink(c2, clientLink);

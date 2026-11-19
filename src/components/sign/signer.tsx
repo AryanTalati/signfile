@@ -35,6 +35,9 @@ export function Signer(p: Props) {
   const [sheet, setSheet] = useState<{ field: FieldDef; value: string } | null>(null);
   const [done, setDone] = useState<{ completed: boolean; nextName: string | null } | null>(null);
   const pageEls = useRef(new Map<number, HTMLDivElement>());
+  // Preview of the date this signer will get, in their local format. Display only: it is never
+  // put in `values`, so it can't be submitted or stamped (the server sets the real date).
+  const datePreview = useMemo(() => new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }), []);
 
   const mine = useMemo(
     () => p.fields.filter((f) => f.roleKey === p.myRole && f.type !== "firm_fill" && f.type !== "agreement_date").sort((a, b) => a.page - b.page || a.y - b.y || a.x - b.x),
@@ -194,7 +197,11 @@ export function Signer(p: Props) {
                   const fontPt = Math.min(f.h * page.height * 0.8, 11);
                   const style = { left: `${f.x * 100}%`, top: `${f.y * 100}%`, width: `${f.w * 100}%`, height: `${f.h * 100}%`, fontSize: `${(fontPt / page.height) * 100}cqh` };
                   const content =
-                    f.type === "checkbox" ? (v === "true" ? "✓" : "") : f.type === "date_signed" && mineField ? "" : isImage(v) ? (
+                    f.type === "checkbox" ? (v === "true" ? "✓" : "") : f.type === "date_signed" && mineField ? (
+                      <span className="text-neutral-400" data-testid="date-preview">
+                        {datePreview}
+                      </span>
+                    ) : isImage(v) ? (
                       // eslint-disable-next-line @next/next/no-img-element -- inline data URL, nothing to optimize
                       <img src={v} alt="Signature" className="h-full w-full object-contain object-left-bottom" />
                     ) : (
@@ -214,9 +221,9 @@ export function Signer(p: Props) {
                       data-testid={`sign-field-${f.type}`}
                       onClick={() => open(f)}
                       disabled={f.type === "date_signed"}
-                      title={f.type === "date_signed" ? "The date is added automatically when you sign" : undefined}
-                      className={`absolute flex items-end overflow-hidden whitespace-nowrap rounded-[3px] px-0.5 pb-px text-left leading-none ${empty ? "animate-pulse border-2 border-dashed" : f.type === "date_signed" ? "border border-dashed" : "border border-transparent hover:border-dashed"}`}
-                      style={{ ...style, borderColor: empty ? p.brand.color : f.type === "date_signed" ? `${p.brand.color}66` : undefined, background: empty ? `${p.brand.color}22` : "transparent", color: empty ? p.brand.color : "#111" }}
+                      title={f.type === "date_signed" ? "Added automatically when you sign" : undefined}
+                      className={`absolute flex items-end overflow-hidden whitespace-nowrap rounded-[3px] px-0.5 pb-px text-left leading-none ${empty ? "animate-pulse border-2 border-dashed" : f.type === "date_signed" ? "cursor-default border border-transparent" : "border border-transparent hover:border-dashed"}`}
+                      style={{ ...style, borderColor: empty ? p.brand.color : undefined, background: empty ? `${p.brand.color}22` : "transparent", color: empty ? p.brand.color : "#111" }}
                       aria-label={f.type === "date_signed" ? "Date signed: added automatically when you sign" : `${f.label}${empty ? " (required)" : ""}`}
                     >
                       {empty ? (f.type === "signature" ? "Sign here" : f.type === "initials" ? "Initial" : f.label) : content}

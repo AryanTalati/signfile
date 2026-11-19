@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Alert, Card } from "@/components/ui";
 import { CopyLink } from "@/components/files/copy-link";
 import { RetrySeal } from "@/components/files/retry-seal";
+import { LocalTime } from "@/components/local-time";
 import { FileStatus } from "@/components/files/status";
 import { requireAuth } from "@/lib/auth/session";
 import { getFile, signLink } from "@/lib/files/service";
@@ -27,7 +28,7 @@ const RECIPIENT_STATUS: Record<string, string> = {
   revoked: "Link revoked",
 };
 
-const fmt = (d: Date | null) => (d ? d.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }) + " UTC" : "");
+const fmt = (d: Date | null) => (d ? <LocalTime iso={d.toISOString()} /> : null);
 
 export default async function FilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ sent?: string; signNowError?: string }> }) {
   const auth = await requireAuth();
@@ -51,7 +52,7 @@ export default async function FilePage({ params, searchParams }: { params: Promi
         </div>
         <p className="mt-1 text-sm text-muted">
           {templateName}
-          {file.reference ? ` · Ref ${file.reference}` : ""} · Sent {fmt(file.sentAt)}
+          {file.reference ? ` · Ref ${file.reference}` : ""} · Sent <span data-testid="sent-at">{fmt(file.sentAt)}</span>
         </p>
       </div>
 
