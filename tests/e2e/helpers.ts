@@ -45,21 +45,26 @@ export async function sendFile(page: Page, fixture = "fixtures/agreements/pdf-tw
 /** Signs as whoever holds the link: consent, then fill every required field, then finish. */
 export async function signViaLink(page: Page, link: string) {
   await page.goto(link);
-  await page.getByRole("button", { name: /I agree/ }).click();
+  const agree = page.getByRole("button", { name: /I agree/ });
   const progress = page.getByTestId("sign-progress");
+  await expect(agree.or(progress)).toBeVisible(); // consent is asked once per signer
+  if (await agree.isVisible()) await agree.click();
   await expect(progress).toBeVisible();
   const finish = page.getByRole("button", { name: "Finish and sign" });
   for (let i = 0; i < 20 && !(await finish.isVisible()); i++) {
     const before = await progress.textContent();
     await page.getByRole("button", { name: /^(Start|Next field)$/ }).click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    if (await dialog.getByRole("button", { name: "Adopt and sign" }).isVisible()) await dialog.getByRole("button", { name: "Adopt and sign" }).click();
-    else {
-      await dialog.getByRole("textbox").fill("Test value");
-      await dialog.getByRole("button", { name: "Save" }).click();
+    // An already-adopted signature fills the next signature field with one tap (no dialog).
+    await expect(dialog.or(page.getByText(new RegExp(`^(?!${(before ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$).* done$`)))).toBeVisible();
+    if (await dialog.isVisible()) {
+      if (await dialog.getByRole("button", { name: "Adopt and sign" }).isVisible()) await dialog.getByRole("button", { name: "Adopt and sign" }).click();
+      else {
+        await dialog.getByRole("textbox").fill("Test value");
+        await dialog.getByRole("button", { name: "Save" }).click();
+      }
+      await expect(dialog).toBeHidden();
     }
-    await expect(dialog).toBeHidden();
     await expect(progress).not.toHaveText(before ?? "");
   }
   const submitted = page.waitForResponse((r) => r.url().includes("/submit"), { timeout: 30_000 });
@@ -80,4 +85,13 @@ export async function expectOnlyOwnFields(page: Page, expectedCount: number) {
     for (let i = 1; i <= 30; i++) body.values[`f${i}`] ??= "data:image/png;base64,iVBORw0KGgo=";
     await route.continue({ postData: JSON.stringify(body) });
   });
+}
+
+/** Hint/placeholder strings that must never appear inside the document area of a signing page. */
+export const PLACEHOLDER_HINTS = [/Date added when you sign/i, /Filled in when everyone has signed/i, /added automatically/i];
+
+export async function expectNoPlaceholdersInDocument(page: Page) {
+  // Overlays sit inside the page containers; their visible text is what would look like document content.
+  const texts = await page.locator("[data-page]").allInnerTexts();
+  for (const t of texts) for (const re of PLACEHOLDER_HINTS) expect(t, `placeholder text in document: ${re}`).not.toMatch(re);
 }

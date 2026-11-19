@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectOnlyOwnFields, sendFile, signupFresh as signFresh, signViaLink } from "./helpers";
+import { expectNoPlaceholdersInDocument, expectOnlyOwnFields, sendFile, signupFresh as signFresh, signViaLink } from "./helpers";
 
 test.skip(!process.env.E2E_BASE_URL, "needs E2E_BASE_URL (Docker image) for uploads");
 test.setTimeout(240_000);
@@ -86,4 +86,32 @@ test("client link shows only client fields; submitting another signer's field is
   await c.unroute("**/api/sign/*/submit");
   await c.getByRole("button", { name: "Finish and sign" }).click();
   await expect(c.getByTestId("sign-done")).toBeVisible();
+});
+
+test("no placeholder text inside the document; real values appear once signed (both pages, all field types)", async ({ page, browser }) => {
+  await signFresh(page, "Example Digital Consulting LLC");
+  const { fileUrl, clientLink } = await sendFile(page, "fixtures/agreements/pdf-compact-blocks.pdf", { company: "Northwind Test Traders", name: "Jordan Example", email: "jordan@example.com" });
+
+  // Client, before signing: their date field is empty, no hint text in the document on any page.
+  const c = await (await browser.newContext()).newPage();
+  await c.goto(clientLink);
+  await c.getByRole("button", { name: /I agree/ }).click();
+  for (const n of [1, 2, 3]) await c.locator(`[data-page="${n}"]`).scrollIntoViewIfNeeded();
+  await expectNoPlaceholdersInDocument(c);
+  await c.close();
+  const c2 = await (await browser.newContext()).newPage();
+  await signViaLink(c2, clientLink);
+
+  // Firm, before countersigning: client's real values (signature image, name, date) show; firm's own date is empty.
+  await page.goto(fileUrl);
+  const firmLink = await page.getByTestId("recipient-firm").getByTestId("signing-link").inputValue();
+  const f = await (await browser.newContext()).newPage();
+  await f.goto(firmLink);
+  await f.getByRole("button", { name: /I agree/ }).click();
+  for (const n of [1, 2, 3]) await f.locator(`[data-page="${n}"]`).scrollIntoViewIfNeeded();
+  await expectNoPlaceholdersInDocument(f);
+  const stamped = await f.getByTestId("stamped-value").allInnerTexts();
+  expect(stamped.some((t) => /^[A-Z][a-z]+ \d{1,2}, \d{4}$/.test(t.trim())), `client's date signed shown: ${JSON.stringify(stamped)}`).toBe(true);
+  expect(stamped.some((t) => t.includes("Jordan Example"))).toBe(true);
+  await expect(f.getByTestId("stamped-value").locator("img").first()).toBeVisible();
 });

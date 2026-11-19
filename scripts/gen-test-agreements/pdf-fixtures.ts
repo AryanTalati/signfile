@@ -291,3 +291,45 @@ export async function pdfUnknownParties(first: string, second: string) {
   }
   return w.doc.save();
 }
+
+/**
+ * Tightly set agreement (Times, 13 pt leading): a long sentence before the Effective Date
+ * blank, party headings directly above compact signature blocks, and a second compact block
+ * on page 2 (Exhibit A). Field boxes must fit the space without touching printed text.
+ */
+export async function pdfCompactBlocks(firm: string, client: string) {
+  const w = await Writer.create({ serif: true });
+  const L = 13;
+  const line = (parts: string, bold = false) => {
+    w.ensure(L * 2);
+    w.page.drawText(parts, { x: w.margin, y: w.y - 10.5, size: 10.5, font: bold ? w.bold : w.font });
+    w.y -= L;
+  };
+  w.para("CONSULTING SERVICES AGREEMENT", { size: 14, bold: true, align: "center", after: 8 });
+  line('This Consulting Services Agreement is made and entered into as of ________________ (the "Effective Date")');
+  line(`by and between ${firm} (the "Consultant") and ${client} (the "Client"). TEST DOCUMENT - NOT A REAL AGREEMENT.`);
+  w.gap(6);
+  clauses(w, 5);
+  w.gap(8);
+  line("IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.");
+  w.gap(6);
+  for (const party of ["CLIENT", firm.toUpperCase()]) {
+    line(party, true);
+    line("Signature: ______________________________");
+    line("Name: ______________________________");
+    line("Title: ______________________________");
+    line("Date: ______________________________");
+    w.gap(8);
+  }
+  w.newPage();
+  w.para("EXHIBIT A - STATEMENT OF WORK", { size: 12, bold: true, after: 6 });
+  w.para("The Consultant will deliver the services described below. TEST DOCUMENT.", { after: 8 });
+  for (const party of [`ACCEPTED BY CLIENT: ${client}`, `${firm.toUpperCase()}`]) {
+    line(party, true);
+    line("By: ______________________________");
+    line("Name: ______________________________");
+    line("Title: ______________________________");
+    w.gap(8);
+  }
+  return w.doc.save();
+}

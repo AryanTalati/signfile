@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { FieldDef } from "@/lib/fields/types";
 import { needsReview } from "@/lib/fields/types";
-import { detectFields } from "@/lib/pdf/detect";
+import { detectFields, inkOverlaps } from "@/lib/pdf/detect";
 import { extractLayout } from "@/lib/pdf/extract";
 import { prepareDocument, UploadError } from "@/lib/pdf/prepare";
 
@@ -119,8 +119,13 @@ async function evalOne(set: string, dir: string, e: Exp): Promise<Row> {
       } else row.missing.push(`${ini.role} initials p${p}`);
     }
   }
+  // Visual regression: no field may overlap printed text on any page.
+  for (const f of det.fields) {
+    const ink = inkOverlaps(layout[f.page - 1], f);
+    if (ink.length) row.missing.push(`OVERLAP p${f.page} ${f.roleKey} ${f.type} covers "${ink.join("").slice(0, 30)}"`);
+  }
   row.extra = det.fields.filter((f) => !matched.has(f)).length;
-  row.ok = row.found === row.expectedFields;
+  row.ok = row.found === row.expectedFields && !row.missing.some((m) => m.startsWith("OVERLAP"));
   row.ms = Date.now() - t0;
   return row;
 }

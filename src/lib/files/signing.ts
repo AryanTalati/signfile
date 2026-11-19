@@ -94,7 +94,7 @@ export async function signingView(ctx: SigningContext) {
   const shown: Record<string, string> = {};
   for (const f of doc.fields) {
     if (f.type === "firm_fill") shown[f.id] = firmValues[f.firmFillKey ?? f.id] ?? "";
-    if (f.type === "agreement_date") shown[f.id] = "Filled in when everyone has signed";
+    // agreement_date stays empty until the last party signs (then it's stamped at sealing).
   }
   for (const o of others) for (const [k, v] of Object.entries(o.values ?? {})) shown[k] = String(v);
   const pages = doc.pages.map((p, i) => ({ page: i + 1, width: p.rotation % 180 ? p.height : p.width, height: p.rotation % 180 ? p.width : p.height }));

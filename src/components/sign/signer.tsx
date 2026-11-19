@@ -147,17 +147,20 @@ export function Signer(p: Props) {
                 .map((f) => {
                   const mineField = f.roleKey === p.myRole && f.type !== "firm_fill" && f.type !== "agreement_date";
                   const v = mineField ? values[f.id] ?? "" : p.shown[f.id] ?? "";
-                  const style = { left: `${f.x * 100}%`, top: `${f.y * 100}%`, width: `${f.w * 100}%`, height: `${f.h * 100}%`, fontSize: `${Math.max(f.h * 62, 1)}cqh` };
+                  // Values rest on the field's line: bottom-aligned, normal type size (≤ 11 pt), never
+                  // taller than the field box (which detection keeps clear of printed text).
+                  const fontPt = Math.min(f.h * page.height * 0.8, 11);
+                  const style = { left: `${f.x * 100}%`, top: `${f.y * 100}%`, width: `${f.w * 100}%`, height: `${f.h * 100}%`, fontSize: `${(fontPt / page.height) * 100}cqh` };
                   const content =
-                    f.type === "checkbox" ? (v === "true" ? "✓" : "") : f.type === "date_signed" && mineField ? "Date added when you sign" : isImage(v) ? (
+                    f.type === "checkbox" ? (v === "true" ? "✓" : "") : f.type === "date_signed" && mineField ? "" : isImage(v) ? (
                       // eslint-disable-next-line @next/next/no-img-element -- inline data URL, nothing to optimize
-                      <img src={v} alt="Signature" className="h-full w-full object-contain object-left" />
+                      <img src={v} alt="Signature" className="h-full w-full object-contain object-left-bottom" />
                     ) : (
                       v
                     );
                   if (!mineField)
                     return v ? (
-                      <div key={f.id} className="pointer-events-none absolute flex items-center overflow-hidden whitespace-nowrap px-0.5 leading-none text-neutral-900" style={style}>
+                      <div key={f.id} data-testid="stamped-value" className="pointer-events-none absolute flex items-end overflow-hidden whitespace-nowrap px-0.5 pb-px leading-none text-neutral-900" style={style}>
                         {content}
                       </div>
                     ) : null;
@@ -169,9 +172,10 @@ export function Signer(p: Props) {
                       data-testid={`sign-field-${f.type}`}
                       onClick={() => open(f)}
                       disabled={f.type === "date_signed"}
-                      className={`absolute flex items-center overflow-hidden whitespace-nowrap rounded-[3px] px-0.5 text-left leading-none ${empty ? "animate-pulse border-2 border-dashed" : "border border-transparent hover:border-dashed"}`}
-                      style={{ ...style, borderColor: empty ? p.brand.color : undefined, background: empty ? `${p.brand.color}22` : "transparent", color: empty ? p.brand.color : "#111" }}
-                      aria-label={`${f.label}${empty ? " (required)" : ""}`}
+                      title={f.type === "date_signed" ? "The date is added automatically when you sign" : undefined}
+                      className={`absolute flex items-end overflow-hidden whitespace-nowrap rounded-[3px] px-0.5 pb-px text-left leading-none ${empty ? "animate-pulse border-2 border-dashed" : f.type === "date_signed" ? "border border-dashed" : "border border-transparent hover:border-dashed"}`}
+                      style={{ ...style, borderColor: empty ? p.brand.color : f.type === "date_signed" ? `${p.brand.color}66` : undefined, background: empty ? `${p.brand.color}22` : "transparent", color: empty ? p.brand.color : "#111" }}
+                      aria-label={f.type === "date_signed" ? "Date signed: added automatically when you sign" : `${f.label}${empty ? " (required)" : ""}`}
                     >
                       {empty ? (f.type === "signature" ? "Sign here" : f.type === "initials" ? "Initial" : f.label) : content}
                     </button>

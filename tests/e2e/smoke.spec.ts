@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectOnlyOwnFields, loginAsDemo, sendFile, signupFresh, uploadAgreement } from "./helpers";
+import { expectNoPlaceholdersInDocument, expectOnlyOwnFields, loginAsDemo, sendFile, signupFresh, uploadAgreement } from "./helpers";
 
 /**
  * Live-site smoke test: short and gentle on the 0.1-CPU free instance.
@@ -50,6 +50,7 @@ test("client link shows only client fields; another signer's field is rejected",
   const c = await (await browser.newContext()).newPage();
   await c.goto(clientLink);
   await c.getByRole("button", { name: /I agree/ }).click();
+  await expectNoPlaceholdersInDocument(c);
   await expectOnlyOwnFields(c, 4);
   await c.getByRole("button", { name: /^(Start|Next field)$/ }).click();
   await c.getByRole("button", { name: "Adopt and sign" }).click();

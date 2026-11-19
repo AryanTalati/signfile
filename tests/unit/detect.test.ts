@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
-import { detectFields } from "../../src/lib/pdf/detect";
+import { detectFields, inkOverlaps } from "../../src/lib/pdf/detect";
 import { extractLayout } from "../../src/lib/pdf/extract";
 
 type PageRef = number | "last";
@@ -53,6 +53,9 @@ for (const dir of sets) {
       for (const ini of e.initials ?? [])
         for (const p of ini.pages) if (!det.fields.some((f) => f.page === p && f.type === "initials" && f.roleKey === ini.role)) missing.push(`${ini.role} initials p${p}`);
       assert.deepEqual(missing, [], `missing fields: ${missing.join(", ")}`);
+      // Visual regression: no field may overlap printed text (stamped values would sit on it).
+      const overlaps = det.fields.map((f) => ({ f, ink: inkOverlaps(layout[f.page - 1], f) })).filter((o) => o.ink.length);
+      assert.deepEqual(overlaps.map((o) => `p${o.f.page} ${o.f.roleKey} ${o.f.type} covers "${o.ink.join("").slice(0, 30)}"`), [], "fields overlap printed text");
       for (const f of det.fields) {
         assert.ok(f.x >= 0 && f.y >= 0 && f.x + f.w <= 1.0001 && f.y + f.h <= 1.0001, `field ${f.id} is off the page`);
         assert.ok(f.confidence > 0 && f.confidence <= 1);

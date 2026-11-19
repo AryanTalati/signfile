@@ -15,6 +15,7 @@ import { docxDotLeaders, docxFilledDate, docxTableBlocks } from "./docx-fixtures
 import { encryptedPdf } from "./encrypt";
 import {
   pdfAcroForm,
+  pdfCompactBlocks,
   pdfDateBlanks,
   pdfUnknownParties,
   pdfDrawnLines,
@@ -58,6 +59,22 @@ const ASTRA = "Astra AI";
 type Gen = { exp: Omit<FixtureExpectation, "check">; make: () => Promise<Uint8Array | Buffer> };
 
 const fixtures: Gen[] = [
+  {
+    exp: {
+      file: "pdf-compact-blocks.pdf", format: "pdf", firmName: "Example Digital Consulting LLC", clientName: "Northwind Test Traders",
+      description: "Tightly set (Times, 13 pt leading): long sentence before the Effective Date blank, party headings directly above compact signature blocks, second compact block on page 2 (Exhibit A).",
+      outcome: "fields",
+      blocks: [
+        { role: "none", page: 1, types: ["agreement_date"] },
+        { role: "client", page: 2, types: ["signature", "full_name", "title", "date_signed"] },
+        { role: "firm", page: 2, types: ["signature", "full_name", "title", "date_signed"] },
+        { role: "client", page: "last", types: ["signature", "full_name", "title"] },
+        { role: "firm", page: "last", types: ["signature", "full_name", "title"] },
+      ],
+      traps: ["Field boxes must not reach the heading above or the label to the left", "Proportional x estimates drift on long sentences"],
+    },
+    make: () => pdfCompactBlocks("Example Digital Consulting LLC", "Northwind Test Traders"),
+  },
   {
     exp: {
       file: "pdf-unknown-parties.pdf", format: "pdf", firmName: "Test Consulting Co", clientName: "Sample Partner LLC",

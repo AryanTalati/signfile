@@ -18,6 +18,16 @@ export interface TextItem {
   baseline: number;
 }
 
+/** One drawn character at its exact position (displayed coords): from the operator list's text state. */
+export interface Glyph {
+  ch: string;
+  x: number;
+  x2: number;
+  /** Top of the glyph's em box and its baseline. */
+  y: number;
+  baseline: number;
+}
+
 export interface Seg {
   x1: number;
   y1: number;
@@ -43,6 +53,8 @@ export interface PageLayout {
   height: number;
   rotation: 0 | 90 | 180 | 270;
   items: TextItem[];
+  /** Exact per-character positions (upright text only). */
+  glyphs: Glyph[];
   hLines: Seg[]; // horizontal, x1 < x2
   vLines: Seg[]; // vertical, y1 < y2
   boxes: Rect[]; // closed rectangles (initials boxes, empty form boxes)
@@ -109,13 +121,72 @@ async function extractPage(page: pdfjs.PDFPageProxy): Promise<PageLayout> {
   const O = pdfjs.OPS;
   const paintOps = new Set<number>([O.stroke, O.closeStroke, O.fill, O.eoFill, O.fillStroke, O.eoFillStroke, O.closeFillStroke, O.closeEOFillStroke]);
   let ctm: Matrix = [1, 0, 0, 1, 0, 0];
-  const stack: Matrix[] = [];
+  const stack: { ctm: Matrix; ts: TextParams }[] = [];
+  // Text state, tracked the way pdf.js's own renderer does, so we know where every glyph lands.
+  type TextParams = { size: number; charSpacing: number; wordSpacing: number; hScale: number; rise: number; leading: number };
+  let ts: TextParams = { size: 10, charSpacing: 0, wordSpacing: 0, hScale: 1, rise: 0, leading: 0 };
+  let tm: Matrix = [1, 0, 0, 1, 0, 0];
+  let lineX = 0, lineY = 0, tx = 0, ty = 0;
+  const glyphs: Glyph[] = [];
+  const moveText = (dx: number, dy: number) => {
+    lineX += dx;
+    lineY += dy;
+    tx = lineX;
+    ty = lineY;
+  };
+  const showText = (arr: unknown[]) => {
+    const m = mul(vt, mul(ctm, tm));
+    for (const g of arr) {
+      if (typeof g === "number") {
+        tx -= (g / 1000) * ts.size * ts.hScale;
+        continue;
+      }
+      if (!g || typeof g !== "object") continue;
+      const glyph = g as { unicode?: string; width?: number; isSpace?: boolean };
+      const adv = ((glyph.width ?? 0) / 1000) * ts.size + ts.charSpacing + (glyph.isSpace ? ts.wordSpacing : 0);
+      const [x1, y1] = apply(m, tx, ty + ts.rise);
+      const [x2, y2] = apply(m, tx + adv * ts.hScale, ty + ts.rise);
+      const [, yTop] = apply(m, tx, ty + ts.rise + ts.size);
+      if (glyph.unicode && Math.abs(y2 - y1) < 0.5 && x2 >= x1) glyphs.push({ ch: glyph.unicode, x: x1, x2, y: Math.min(yTop, y1), baseline: y1 });
+      tx += adv * ts.hScale;
+    }
+  };
   for (let i = 0; i < ops.fnArray.length; i++) {
     const fn = ops.fnArray[i];
     const args = ops.argsArray[i];
-    if (fn === O.save) stack.push(ctm);
-    else if (fn === O.restore) ctm = stack.pop() ?? [1, 0, 0, 1, 0, 0];
+    if (fn === O.save) stack.push({ ctm, ts: { ...ts } });
+    else if (fn === O.restore) ({ ctm, ts } = stack.pop() ?? { ctm: [1, 0, 0, 1, 0, 0], ts });
     else if (fn === O.transform) ctm = mul(ctm, args as Matrix);
+    else if (fn === O.beginText) {
+      tm = [1, 0, 0, 1, 0, 0];
+      lineX = lineY = tx = ty = 0;
+    } else if (fn === O.setFont) ts.size = Math.abs((args as [unknown, number])[1]) || ts.size;
+    else if (fn === O.setTextMatrix) {
+      // pdf.js v6 passes the matrix as one typed array; older versions as six numbers.
+      const a = args as unknown[];
+      tm = Array.from((a.length === 1 ? a[0] : a) as ArrayLike<number>) as Matrix;
+      lineX = lineY = tx = ty = 0;
+    } else if (fn === O.moveText) moveText((args as number[])[0], (args as number[])[1]);
+    else if (fn === O.setLeadingMoveText) {
+      ts.leading = -(args as number[])[1];
+      moveText((args as number[])[0], (args as number[])[1]);
+    } else if (fn === O.setLeading) ts.leading = (args as number[])[0];
+    else if (fn === O.nextLine) moveText(0, -ts.leading);
+    else if (fn === O.setCharSpacing) ts.charSpacing = (args as number[])[0];
+    else if (fn === O.setWordSpacing) ts.wordSpacing = (args as number[])[0];
+    else if (fn === O.setHScale) ts.hScale = (args as number[])[0] / 100;
+    else if (fn === O.setTextRise) ts.rise = (args as number[])[0];
+    else if (fn === O.showText || fn === O.showSpacedText) showText((args as unknown[][])[0]);
+    else if (fn === O.nextLineShowText) {
+      moveText(0, -ts.leading);
+      showText((args as unknown[][])[0]);
+    } else if (fn === O.nextLineSetSpacingShowText) {
+      const a = args as [number, number, unknown[]];
+      ts.wordSpacing = a[0];
+      ts.charSpacing = a[1];
+      moveText(0, -ts.leading);
+      showText(a[2]);
+    }
     else if (fn === O.constructPath) {
       const [paint, pathArgs] = args as [number, (ArrayLike<number> | null)[]];
       if (!paintOps.has(paint)) continue; // clip paths etc.
@@ -146,6 +217,7 @@ async function extractPage(page: pdfjs.PDFPageProxy): Promise<PageLayout> {
     height: viewport.height,
     rotation,
     items: items.sort((a, b) => a.baseline - b.baseline || a.x - b.x),
+    glyphs,
     hLines: dedupeSegs(hLines, "h"),
     vLines: dedupeSegs(vLines, "v"),
     boxes,

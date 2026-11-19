@@ -20,7 +20,7 @@
  */
 import { REVIEW_THRESHOLD, type FieldDef, type FieldType, type RoleDef } from "@/lib/fields/types";
 import { DEFAULT_ROLES } from "@/lib/fields/validate";
-import type { PageLayout, Rect, Seg, TextItem } from "./extract";
+import type { Glyph, PageLayout, Rect, Seg, TextItem } from "./extract";
 
 
 export { REVIEW_THRESHOLD };
@@ -461,7 +461,96 @@ function labelOwns(p: Phrase, c: Candidate): boolean {
 
 // ---------- pass 4+5: candidates, blocks, roles ----------
 
-function toCandidate(b: Blank, pageW: number): Candidate | null {
+// ---------- exact geometry ----------
+
+interface PageGeo {
+  width: number;
+  /** Printed characters that are not part of a blank (underscores / dot leaders). */
+  ink: Glyph[];
+  /** Exact runs of blank characters (underscores, dot leaders, ellipses). */
+  runs: { x1: number; x2: number; baseline: number }[];
+  hLines: Seg[];
+}
+
+const BLANK_CH = /^[_.…]$/;
+
+function pageGeo(page: PageLayout): PageGeo {
+  const gs = [...page.glyphs].sort((a, b) => a.baseline - b.baseline || a.x - b.x);
+  const inRun = new Set<Glyph>();
+  const runs: PageGeo["runs"] = [];
+  for (let i = 0; i < gs.length; ) {
+    if (!BLANK_CH.test(gs[i].ch)) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j + 1 < gs.length && BLANK_CH.test(gs[j + 1].ch) && Math.abs(gs[j + 1].baseline - gs[i].baseline) < 1 && gs[j + 1].x - gs[j].x2 < 2) j++;
+    const run = gs.slice(i, j + 1);
+    // A blank is 3+ underscores or 6+ dots; shorter runs are punctuation ("e.g.", "...").
+    const n = run.length;
+    if ((run[0].ch === "_" && n >= 3) || n >= 6) {
+      run.forEach((g) => inRun.add(g));
+      runs.push({ x1: run[0].x, x2: run[n - 1].x2, baseline: run[0].baseline });
+    }
+    i = j + 1;
+  }
+  return { width: page.width, ink: gs.filter((g) => !inRun.has(g) && g.ch.trim() !== ""), runs, hLines: page.hLines };
+}
+
+/** Replaces estimated blank edges with the exact glyph run (proportional estimates drift into nearby words). */
+function snapToRuns(blanks: Blank[], geo: PageGeo) {
+  for (const b of blanks) {
+    if (b.kind !== "underscore" && b.kind !== "dots") continue;
+    let best: PageGeo["runs"][number] | null = null;
+    let bestOv = 0;
+    for (const r of geo.runs) {
+      if (Math.abs(r.baseline + 1 - b.bottom) > 3) continue;
+      const ov = xOverlap(r.x1, r.x2, b.x1 - 25, b.x2 + 25);
+      if (ov > bestOv) [best, bestOv] = [r, ov];
+    }
+    if (best) {
+      b.x1 = best.x1;
+      b.x2 = best.x2;
+      b.bottom = best.baseline + 1;
+    }
+  }
+}
+
+/**
+ * Shrinks a field box so it never covers printed text or a line: it rests on its own
+ * line (bottom) and stops below the text/line above, before text to the right, and after
+ * text to the left. Every stamped value is drawn inside this box.
+ */
+function fitBox(geo: PageGeo, x: number, w: number, h: number, bottom: number) {
+  let top = bottom - h;
+  for (const g of geo.ink) {
+    // Text on the line above anywhere in this row (incl. a heading to the left, like "CLIENT") caps the
+    // box, so a value never rises beside the previous line.
+    if (g.baseline >= bottom - 2 || xOverlap(g.x, g.x2, x - 200, x + w) <= 0.5) continue;
+    const descent = (g.baseline - g.y) * 0.25;
+    top = Math.max(top, g.baseline + descent + 1);
+  }
+  for (const l of geo.hLines) if (l.y1 < bottom - 3 && xOverlap(l.x1, l.x2, x, x + w) > 1) top = Math.max(top, l.y1 + 1.5);
+  // Text on the same rows: start after text on the left, stop before text on the right.
+  const rowInk = geo.ink.filter((g) => g.y < bottom - 0.5 && g.baseline > top + 0.5);
+  for (const g of rowInk) if (g.x < x + 2 && g.x2 > x) x = g.x2 + 1;
+  for (const g of rowInk) if (g.x >= x && g.x < x + w) w = g.x - 1.5 - x;
+  h = Math.max(bottom - 1 - top, 8);
+  return { x, y: bottom - 1 - h, w: Math.max(w, 16), h };
+}
+
+/**
+ * Regression check (tests + eval): printed characters a field's box overlaps. A field must
+ * never cover printed text, or stamped values would sit on top of it.
+ */
+export function inkOverlaps(page: PageLayout, f: FieldDef): string[] {
+  if (f.source === "acroform") return []; // the document's own form defines that box
+  const geo = pageGeo(page);
+  const x1 = f.x * page.width, x2 = (f.x + f.w) * page.width, y1 = f.y * page.height, y2 = (f.y + f.h) * page.height;
+  return geo.ink.filter((g) => xOverlap(g.x, g.x2, x1, x2) > 0.5 && xOverlap(g.y, g.baseline, y1, y2) > 0.5).map((g) => g.ch);
+}
+
+function toCandidate(b: Blank, geo: PageGeo): Candidate | null {
   if (!b.label) return null;
   const c = classify(b.label.text);
   if (!c) return null;
@@ -484,8 +573,9 @@ function toCandidate(b: Blank, pageW: number): Candidate | null {
     w = Math.min(Math.max(width, 60), 220);
     h = 15;
   }
-  const x = Math.min(b.x1, pageW - w - 4);
-  return { page: b.page, type, label: labelFor(type, b.label.text), x, y: b.bottom - h - 1, w, h, typeConf, blank: b };
+  const x0 = Math.min(b.x1, geo.width - w - 4);
+  const fit = fitBox(geo, x0, w, h, b.bottom);
+  return { page: b.page, type, label: labelFor(type, b.label.text), ...fit, typeConf, blank: b };
 }
 
 function labelFor(type: FieldType, raw: string) {
@@ -622,7 +712,9 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
       });
     }
 
+    const geo = pageGeo(page);
     const text = textBlanks(phrases, page.items);
+    snapToRuns(text, geo);
     // Drop drawn lines that sit under an underscore run (Word draws both).
     const lines = lineBlanks(page, phrases).filter((l) => !text.some((t) => Math.abs(t.bottom - l.bottom) < 6 && xOverlap(t.x1, t.x2, l.x1, l.x2) > 0.5 * (l.x2 - l.x1)));
     const boxes = boxBlanks(page, phrases).filter((b) => !page.widgets.some((w) => xOverlap(w.x, w.x + w.w, b.x1, b.x2) > 0 && Math.abs(w.y + w.h - b.bottom) < 6));
@@ -649,13 +741,10 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
         x2 = next.x2;
         k++;
       }
-      const w = Math.min(Math.max(x2 - b.x1, 70), 220);
+      const fit = fitBox(geo, b.x1, Math.min(x2 - b.x1, 220), 15, b.bottom);
       systemFields.push({
         page: page.page,
-        x: b.x1,
-        y: b.bottom - 15,
-        w,
-        h: 15,
+        ...fit,
         type,
         label: type === "agreement_date" ? "Agreement date" : "Date",
         typeConf: 0.6,
@@ -672,7 +761,7 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
         witness++;
         continue;
       }
-      const cand = toCandidate(b, page.width);
+      const cand = toCandidate(b, geo);
       if (!cand) continue;
       stats.labelled++;
       cands.push(cand);
@@ -685,7 +774,7 @@ export function detectFields(pages: PageLayout[], opts: DetectOptions = {}): Det
     }
     const anchors = anchorBlanks(page, phrases, used);
     for (const a of anchors) {
-      const cand = toCandidate(a, page.width);
+      const cand = toCandidate(a, geo);
       if (cand && !cands.some((c) => c.page === cand.page && xOverlap(c.x, c.x + c.w, cand.x, cand.x + cand.w) > 0 && Math.abs(c.y - cand.y) < 12)) {
         stats.anchors++;
         cands.push(cand);
