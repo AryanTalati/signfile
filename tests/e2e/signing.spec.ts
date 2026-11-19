@@ -1,0 +1,63 @@
+import { expect, test } from "@playwright/test";
+import { sendFile, signupFresh as signFresh, signViaLink } from "./helpers";
+
+test.skip(!process.env.E2E_BASE_URL, "needs E2E_BASE_URL (Docker image) for uploads");
+test.setTimeout(240_000);
+
+test("client signs, firm countersigns, File completes", async ({ page, browser }) => {
+  await signFresh(page);
+  const { fileUrl, clientLink } = await sendFile(page);
+
+  // The client signs in a separate, logged-out browser.
+  const client = await (await browser.newContext()).newPage();
+  await signViaLink(client, clientLink);
+  await expect(client.getByTestId("sign-done")).toContainText("countersigns next");
+
+  // Same link again: already signed.
+  await client.goto(clientLink);
+  await expect(client.getByTestId("sign-state-signed")).toBeVisible();
+
+  // Firm's link is now active on the File page.
+  await page.goto(fileUrl);
+  await expect(page.getByTestId("file-status")).toHaveText("Waiting for countersign");
+  await expect(page.getByTestId("recipient-client").getByTestId("recipient-status")).toHaveText("Signed");
+  const firmLink = await page.getByTestId("recipient-firm").getByTestId("signing-link").inputValue();
+  await expect(page.getByText(/Countersign: Globex Test Industries Ltd signed/)).toBeVisible();
+
+  const firm = await (await browser.newContext()).newPage();
+  await signViaLink(firm, firmLink);
+  await expect(firm.getByTestId("sign-done")).toContainText("Everyone has signed");
+
+  await page.reload();
+  await expect(page.getByTestId("file-status")).toHaveText("Signed");
+  await client.goto(clientLink);
+  await expect(client.getByTestId("sign-state-completed")).toBeVisible();
+});
+
+test("draw a signature on the canvas", async ({ page, browser }) => {
+  await signFresh(page);
+  const { clientLink } = await sendFile(page);
+  const c = await (await browser.newContext()).newPage();
+  await c.goto(clientLink);
+  await c.getByRole("button", { name: /I agree/ }).click();
+  await c.getByRole("button", { name: /^(Start|Next field)$/ }).click();
+  await c.getByRole("tab", { name: "Draw" }).click();
+  const box = (await c.getByTestId("draw-canvas").boundingBox())!;
+  await c.mouse.move(box.x + 20, box.y + box.height / 2);
+  await c.mouse.down();
+  for (let i = 1; i <= 10; i++) await c.mouse.move(box.x + 20 + i * 25, box.y + box.height / 2 + (i % 2 ? -20 : 20));
+  await c.mouse.up();
+  await c.getByRole("button", { name: "Adopt and sign" }).click();
+  // Title is still required (no title was given when sending).
+  await c.getByRole("button", { name: "Next field" }).click();
+  await c.getByRole("dialog").getByRole("textbox").fill("COO");
+  await c.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+  await expect(c.getByRole("button", { name: "Finish and sign" })).toBeVisible();
+  await c.getByRole("button", { name: "Finish and sign" }).click();
+  await expect(c.getByTestId("sign-done")).toBeVisible();
+});
+
+test("an invalid link is a 404", async ({ page }) => {
+  const res = await page.goto("/sign/not-a-real-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  expect(res?.status()).toBe(404);
+});
