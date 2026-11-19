@@ -15,8 +15,9 @@
     "db:verify": "tsx --env-file=.env.local scripts/verify-db.ts",
     "seed": "tsx --conditions=react-server --env-file=.env.local scripts/seed.ts",
     "test:e2e": "playwright test",
-    "test:unit": "tsx --test tests/unit/*.test.ts",
-    "purge:company": "tsx --env-file=.env.local scripts/purge-company.ts"
+    "test:unit": "tsx --conditions=react-server --test tests/unit/*.test.ts",
+    "purge:company": "tsx --env-file=.env.local scripts/purge-company.ts",
+    "eval:detection": "docker build --platform linux/amd64 -q --target tools -t signfile:tools . >/dev/null && docker run --rm --platform linux/amd64 -v \"/Users/aryantalati/signfile/fixtures:/app/fixtures\" signfile:tools npx tsx --conditions=react-server scripts/eval-detection.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",

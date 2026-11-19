@@ -1,0 +1,46 @@
+[
+  {
+    "file": "commonpaper-psa-v1.1.docx",
+    "format": "docx",
+    "firmName": "Example Consulting LLC",
+    "clientName": "Test Client Inc",
+    "description": "Common Paper PSA v1.1 (cover page + standard terms). Two signing tables (SOW cover, Key Terms cover): row labels in a left column, signature lines in PROVIDER/CUSTOMER columns, company names are placeholders.",
+    "outcome": "fields",
+    "signatures": [{ "role": "firm", "page": 2 }, { "role": "client", "page": 2 }, { "role": "firm", "page": 6 }, { "role": "client", "page": 6 }],
+    "blocks": [
+      { "role": "firm", "page": 2, "types": ["signature", "full_name", "title", "date_signed"] },
+      { "role": "client", "page": 2, "types": ["signature", "full_name", "title", "date_signed"] },
+      { "role": "firm", "page": 6, "types": ["signature", "full_name", "title", "date_signed"] },
+      { "role": "client", "page": 6, "types": ["signature", "full_name", "title", "date_signed"] }
+    ],
+    "traps": ["Row labels are in a separate left column, not next to the lines", "Key Terms tables have many '[Fill in ...]' blanks that are not signature fields", "Page-wide table rules must not become fields"]
+  },
+  {
+    "file": "commonpaper-csa-v1.0-cover.pdf",
+    "format": "pdf",
+    "firmName": "Example Consulting LLC",
+    "clientName": "Test Client Inc",
+    "description": "Common Paper Cloud Service Agreement v1.0 cover page (4 pages, published PDF). Signature table on page 4 with PROVIDER/CUSTOMER columns.",
+    "outcome": "fields",
+    "signatures": [{ "role": "firm", "page": 4 }, { "role": "client", "page": 4 }],
+    "blocks": [
+      { "role": "firm", "page": 4, "types": ["signature", "full_name", "title", "date_signed"] },
+      { "role": "client", "page": 4, "types": ["signature", "full_name", "title", "date_signed"] }
+    ],
+    "traps": ["Checkbox glyphs for publicity rights are not signer fields", "Grey placeholder text in the column headers"]
+  },
+  {
+    "file": "bonterms-cloud-terms-example-cover.docx",
+    "format": "docx",
+    "firmName": "Example Consulting LLC",
+    "clientName": "Test Client Inc",
+    "description": "Bonterms Cloud Terms example cover page. 'Signature:', 'Name and Title:', 'Company:', 'Date:' labels in table cells with NO lines or underscores; Customer (left) and Provider (right) columns.",
+    "outcome": "fields",
+    "signatures": [{ "role": "client", "page": 1 }, { "role": "firm", "page": 1 }],
+    "blocks": [
+      { "role": "client", "page": 1, "types": ["signature", "text", "company", "date_signed"] },
+      { "role": "firm", "page": 1, "types": ["signature", "text", "company", "date_signed"] }
+    ],
+    "traps": ["No blank to sign on: the field must go in the empty space after the label", "'Name and Title' is one combined field", "Key Terms rows ('Effective Date', 'Fill in date') are not signer fields"]
+  }
+]

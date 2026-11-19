@@ -39,6 +39,8 @@ export interface FixtureExpectation {
   rejectCode?: "encrypted";
   /** Minimum signature fields the detector must find, by role and page. */
   signatures?: { role: Role; page: PageRef }[];
+  /** Field types each party's signature block should contain (the eval reports found vs expected per type). */
+  blocks?: { role: Role; page: PageRef; types: string[] }[];
   initials?: { role: Role; pages: number[] }[];
   /** Things a naive detector gets wrong on this file. */
   traps?: string[];
@@ -57,6 +59,7 @@ const fixtures: Gen[] = [
       file: "docx-table-blocks.docx", format: "docx", firmName: ASTRA, clientName: "Globex Test Industries Ltd",
       description: "DOCX; signature blocks are a bordered table (label cell + empty cell), no underscores; also has a fee table.",
       outcome: "fields",
+      blocks: [{ role: "firm", page: "last", types: ["signature", "full_name", "title", "date_signed"] }, { role: "client", page: "last", types: ["signature", "full_name", "title", "date_signed"] }],
       signatures: [{ role: "firm", page: "last" }, { role: "client", page: "last" }],
       traps: ["Signature 'line' is a table cell border, not text or a path under a label", "Fee table cells must not become fields", "Labels are 'Authorised signatory' / 'Position', not 'Signature' / 'Title'"],
     },
@@ -67,6 +70,7 @@ const fixtures: Gen[] = [
       file: "docx-dot-leaders.docx", format: "docx", firmName: "Example Consulting LLC", clientName: "Umbrella Test Holdings Inc.",
       description: "DOCX; UK-style 'SIGNED by ......' execution clauses with dot leaders; party named on the line AFTER the signature line.",
       outcome: "fields",
+      blocks: [{ role: "client", page: "last", types: ["signature"] }, { role: "firm", page: "last", types: ["signature"] }],
       signatures: [{ role: "client", page: "last" }, { role: "firm", page: "last" }],
       traps: ["Dot leaders, not underscores", "Role appears below the line ('for and on behalf of')", "Witness lines are not a party signer", "'electronic signature' appears in clause body text", "'DATED: .....' on page 1 is not a signer field"],
     },
@@ -77,6 +81,7 @@ const fixtures: Gen[] = [
       file: "pdf-drawn-lines.pdf", format: "pdf", firmName: ASTRA, clientName: "Initech Test Co.",
       description: "Signature lines are vector paths with labels BELOW them; stacked CLIENT then firm blocks.",
       outcome: "fields",
+      blocks: [{ role: "client", page: "last", types: ["signature", "date_signed", "full_name", "title"] }, { role: "firm", page: "last", types: ["signature", "date_signed", "full_name", "title"] }],
       signatures: [{ role: "client", page: "last" }, { role: "firm", page: "last" }],
       traps: ["No underscore text at all", "Label is below the line, not to the left"],
     },
@@ -87,6 +92,7 @@ const fixtures: Gen[] = [
       file: "pdf-two-column.pdf", format: "pdf", firmName: "Northwind Example Labs", clientName: "Hooli Test Systems",
       description: "Two signature blocks side by side: PROVIDER (left) and CUSTOMER (right), 'By: ____' style.",
       outcome: "fields",
+      blocks: [{ role: "firm", page: "last", types: ["signature", "full_name", "title", "date_signed"] }, { role: "client", page: "last", types: ["signature", "full_name", "title", "date_signed"] }],
       signatures: [{ role: "firm", page: "last" }, { role: "client", page: "last" }],
       traps: ["Firm isn't the demo company, so role must come from PROVIDER/CUSTOMER", "Same row holds both parties' fields", "'By:' means signature"],
     },
@@ -97,6 +103,7 @@ const fixtures: Gen[] = [
       file: "pdf-multipage-initials.pdf", format: "pdf", firmName: ASTRA, clientName: "Vandelay Test Imports",
       description: "6 pages, empty initials boxes in every page footer for both parties; signatures on the last page.",
       outcome: "fields",
+      blocks: [{ role: "client", page: 6, types: ["signature", "date_signed"] }, { role: "firm", page: 6, types: ["signature", "date_signed"] }],
       signatures: [{ role: "client", page: 6 }, { role: "firm", page: 6 }],
       initials: [{ role: "client", pages: [1, 2, 3, 4, 5, 6] }, { role: "firm", pages: [1, 2, 3, 4, 5, 6] }],
       traps: ["Initials targets are drawn rectangles", "Repeated footer on every page"],
@@ -117,6 +124,7 @@ const fixtures: Gen[] = [
       file: "pdf-rotated.pdf", format: "pdf", firmName: ASTRA, clientName: "Stark Test Logistics",
       description: "Page 2 is a landscape page with /Rotate 90 whose content displays upright as portrait.",
       outcome: "fields",
+      blocks: [{ role: "client", page: 2, types: ["signature", "full_name", "title", "date_signed"] }, { role: "firm", page: 2, types: ["signature", "full_name", "title", "date_signed"] }],
       signatures: [{ role: "client", page: 2 }, { role: "firm", page: 2 }],
       traps: ["Field coordinates must be in displayed space; stamping must undo the rotation"],
     },
@@ -136,6 +144,7 @@ const fixtures: Gen[] = [
       file: "pdf-acroform.pdf", format: "pdf", firmName: "Example Dev Studio", clientName: "Cyberdyne Test Systems",
       description: "Existing AcroForm text fields (customer_signature, developer_date, ...) and a checkbox.",
       outcome: "fields",
+      blocks: [{ role: "client", page: "last", types: ["signature", "full_name", "date_signed"] }, { role: "firm", page: "last", types: ["signature", "full_name", "date_signed"] }],
       signatures: [{ role: "client", page: "last" }, { role: "firm", page: "last" }],
       traps: ["Existing form widgets must be used or flattened, not left editable in the sealed PDF", "DEVELOPER = firm, CUSTOMER = client"],
     },
@@ -146,6 +155,7 @@ const fixtures: Gen[] = [
       file: "pdf-large.pdf", format: "pdf", firmName: ASTRA, clientName: "Massive Test Dynamic",
       description: "~150 pages, several MB (incompressible images), signatures on the last page.",
       outcome: "fields",
+      blocks: [{ role: "client", page: "last", types: ["signature", "full_name", "date_signed"] }, { role: "firm", page: "last", types: ["signature", "full_name", "date_signed"] }],
       signatures: [{ role: "client", page: "last" }, { role: "firm", page: "last" }],
       traps: ["Upload, detection, rendering and sealing must stay fast and within memory"],
     },
@@ -165,6 +175,7 @@ const fixtures: Gen[] = [
       file: "pdf-encrypted-permissions.pdf", format: "pdf", firmName: ASTRA, clientName: "Test Client",
       description: "Opens without a password but is encrypted with permission restrictions (owner password only).",
       outcome: "fields",
+      blocks: [{ role: "client", page: 1, types: ["signature", "date_signed"] }],
       signatures: [{ role: "client", page: 1 }],
       traps: ["Opens fine in viewers, so rejecting it would surprise users; strip restrictions before stamping"],
     },

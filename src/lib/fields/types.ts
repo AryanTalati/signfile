@@ -41,10 +41,17 @@ export interface FieldDef {
   required: boolean;
   /** For firm_fill: the key in files.firm_values. */
   firmFillKey?: string;
-  /** 0-1. Below the review threshold, the editor flags it. */
+  /** 0-1. Below the review threshold (0.7), the editor flags it until reviewed. */
   confidence: number;
   source: "rule" | "manual" | "ai" | "appended" | "acroform";
+  /** Why the detector placed it (shown on hover in the editor). */
+  reason?: string;
+  /** A person confirmed, moved or edited it in the editor. Clears the low-confidence flag. */
+  reviewed?: boolean;
 }
+
+export const REVIEW_THRESHOLD = 0.7;
+export const needsReview = (f: FieldDef) => !f.reviewed && f.source !== "manual" && f.confidence < REVIEW_THRESHOLD;
 
 export interface PageInfo {
   /** Media box size in PDF points, before rotation. */

@@ -6,6 +6,28 @@
     "clientName": "Globex Test Industries Ltd",
     "description": "DOCX; signature blocks are a bordered table (label cell + empty cell), no underscores; also has a fee table.",
     "outcome": "fields",
+    "blocks": [
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed"
+        ]
+      },
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed"
+        ]
+      }
+    ],
     "signatures": [
       {
         "role": "firm",
@@ -29,6 +51,22 @@
     "clientName": "Umbrella Test Holdings Inc.",
     "description": "DOCX; UK-style 'SIGNED by ......' execution clauses with dot leaders; party named on the line AFTER the signature line.",
     "outcome": "fields",
+    "blocks": [
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature"
+        ]
+      },
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature"
+        ]
+      }
+    ],
     "signatures": [
       {
         "role": "client",
@@ -54,6 +92,28 @@
     "clientName": "Initech Test Co.",
     "description": "Signature lines are vector paths with labels BELOW them; stacked CLIENT then firm blocks.",
     "outcome": "fields",
+    "blocks": [
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "date_signed",
+          "full_name",
+          "title"
+        ]
+      },
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "date_signed",
+          "full_name",
+          "title"
+        ]
+      }
+    ],
     "signatures": [
       {
         "role": "client",
@@ -86,6 +146,28 @@
     "clientName": "Hooli Test Systems",
     "description": "Two signature blocks side by side: PROVIDER (left) and CUSTOMER (right), 'By: ____' style.",
     "outcome": "fields",
+    "blocks": [
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed"
+        ]
+      },
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed"
+        ]
+      }
+    ],
     "signatures": [
       {
         "role": "firm",
@@ -118,6 +200,24 @@
     "clientName": "Vandelay Test Imports",
     "description": "6 pages, empty initials boxes in every page footer for both parties; signatures on the last page.",
     "outcome": "fields",
+    "blocks": [
+      {
+        "role": "client",
+        "page": 6,
+        "types": [
+          "signature",
+          "date_signed"
+        ]
+      },
+      {
+        "role": "firm",
+        "page": 6,
+        "types": [
+          "signature",
+          "date_signed"
+        ]
+      }
+    ],
     "signatures": [
       {
         "role": "client",
@@ -197,6 +297,28 @@
     "clientName": "Stark Test Logistics",
     "description": "Page 2 is a landscape page with /Rotate 90 whose content displays upright as portrait.",
     "outcome": "fields",
+    "blocks": [
+      {
+        "role": "client",
+        "page": 2,
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed"
+        ]
+      },
+      {
+        "role": "firm",
+        "page": 2,
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed"
+        ]
+      }
+    ],
     "signatures": [
       {
         "role": "client",
@@ -247,6 +369,26 @@
     "clientName": "Cyberdyne Test Systems",
     "description": "Existing AcroForm text fields (customer_signature, developer_date, ...) and a checkbox.",
     "outcome": "fields",
+    "blocks": [
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "date_signed"
+        ]
+      },
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "date_signed"
+        ]
+      }
+    ],
     "signatures": [
       {
         "role": "client",
@@ -279,6 +421,26 @@
     "clientName": "Massive Test Dynamic",
     "description": "~150 pages, several MB (incompressible images), signatures on the last page.",
     "outcome": "fields",
+    "blocks": [
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "date_signed"
+        ]
+      },
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "date_signed"
+        ]
+      }
+    ],
     "signatures": [
       {
         "role": "client",
@@ -470,6 +632,16 @@
     "clientName": "Test Client",
     "description": "Opens without a password but is encrypted with permission restrictions (owner password only).",
     "outcome": "fields",
+    "blocks": [
+      {
+        "role": "client",
+        "page": 1,
+        "types": [
+          "signature",
+          "date_signed"
+        ]
+      }
+    ],
     "signatures": [
       {
         "role": "client",
