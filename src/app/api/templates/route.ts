@@ -1,6 +1,6 @@
 import { fail, json, authOr401 } from "@/lib/http/respond";
 import { MAX_UPLOAD_BYTES, UploadError } from "@/lib/pdf/prepare";
-import { createTemplateFromUpload } from "@/lib/templates/service";
+import { AbortedError, BusyError, createTemplateFromUpload } from "@/lib/templates/service";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -24,10 +24,12 @@ export async function POST(req: Request) {
   if (!file || file.size === 0) return fail(400, "Upload a file.", { code: "empty" });
 
   try {
-    const { templateId, detection } = await createTemplateFromUpload(auth, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
+    const { templateId, detection } = await createTemplateFromUpload(auth, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }, req.signal);
     return json({ id: templateId, outcome: detection.outcome, fields: detection.fields.length, warnings: detection.warnings }, 201);
   } catch (e) {
     if (e instanceof UploadError) return fail(422, e.message, { code: e.code });
+    if (e instanceof BusyError) return fail(503, e.message, { code: "busy" });
+    if (e instanceof AbortedError) return new Response(null, { status: 499 });
     console.error("template upload failed", e);
     return fail(500, "Something went wrong processing that document. Please try again.");
   }

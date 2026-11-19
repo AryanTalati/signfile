@@ -7,7 +7,13 @@ import { Alert, Button, Card } from "@/components/ui";
 const ACCEPT = ".pdf,.docx,.doc,.odt,.rtf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword";
 const MAX = 25 * 1024 * 1024;
 
-type Phase = { kind: "idle" } | { kind: "uploading"; pct: number } | { kind: "processing"; started: number } | { kind: "error"; message: string };
+type Phase =
+  | { kind: "idle" }
+  | { kind: "uploading"; pct: number }
+  | { kind: "processing"; started: number }
+  | { kind: "queued"; attempt: number }
+  | { kind: "error"; message: string };
+const BUSY_RETRIES = 12; // ~1 minute
 
 export function UploadForm() {
   const router = useRouter();
@@ -30,7 +36,7 @@ export function UploadForm() {
     upload(f);
   }
 
-  function upload(f: File) {
+  function upload(f: File, attempt = 0) {
     const body = new FormData();
     body.append("file", f);
     const xhr = new XMLHttpRequest();
@@ -43,6 +49,11 @@ export function UploadForm() {
         data = JSON.parse(xhr.responseText);
       } catch {}
       if (xhr.status === 201 && data.id) router.push(`/templates/${data.id}?new=1`);
+      else if (xhr.status === 503 && attempt < BUSY_RETRIES) {
+        // Server is processing other documents: wait our turn instead of failing.
+        setPhase({ kind: "queued", attempt: attempt + 1 });
+        setTimeout(() => upload(f, attempt + 1), 5000);
+      }
       else if (xhr.status === 401) router.push("/login?next=/templates/new");
       else setPhase({ kind: "error", message: data.error ?? "Upload failed. Please try again." });
     };
@@ -51,11 +62,13 @@ export function UploadForm() {
     xhr.send(body);
   }
 
-  const busy = phase.kind === "uploading" || phase.kind === "processing";
+  const busy = phase.kind === "uploading" || phase.kind === "processing" || phase.kind === "queued";
   const isWord = file && !/\.pdf$/i.test(file.name);
   const elapsed = phase.kind === "processing" ? Math.floor((now - phase.started) / 1000) : 0;
   const step =
-    phase.kind === "uploading"
+    phase.kind === "queued"
+      ? "Waiting for other documents to finish…"
+      : phase.kind === "uploading"
       ? `Uploading… ${phase.pct}%`
       : phase.kind === "processing"
         ? isWord && elapsed < 25

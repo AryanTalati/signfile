@@ -14,6 +14,8 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: true,
+  // A deployed free-tier instance has 0.1 CPU: 2 workers is a realistic load; local/Docker runs use all cores.
+  workers: external && !/localhost|127\.0\.0\.1/.test(external) ? 2 : undefined,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
   globalTeardown: "./tests/e2e/global-teardown.ts",

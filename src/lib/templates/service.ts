@@ -18,10 +18,45 @@ import { deleteObjects, getObject, putObject } from "@/lib/storage";
 
 const EXT: Record<string, string> = { pdf: "pdf", docx: "docx", doc: "doc", odt: "odt", rtf: "rtf" };
 
-export async function createTemplateFromUpload(auth: AuthContext, file: { name: string; bytes: Uint8Array }) {
+/**
+ * Document processing (conversion, parsing, detection) is CPU-heavy and the
+ * Render free instance has 0.1 CPU. Process one upload at a time, let a few
+ * wait, and turn the rest away with a clear message rather than letting a
+ * backlog make the whole site unresponsive.
+ */
+const MAX_WAITING = 3;
+let processing: Promise<unknown> = Promise.resolve();
+let waiting = 0;
+
+export class BusyError extends Error {}
+export class AbortedError extends Error {}
+
+function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+  if (waiting >= MAX_WAITING) return Promise.reject(new BusyError("We're processing other documents right now. Try again in a minute."));
+  waiting++;
+  const run = processing.then(
+    () => (waiting--, fn()),
+    () => (waiting--, fn()),
+  );
+  processing = run.catch(() => undefined);
+  return run;
+}
+
+export function createTemplateFromUpload(auth: AuthContext, file: { name: string; bytes: Uint8Array }, signal?: AbortSignal) {
+  return exclusive(() => processUpload(auth, file, signal));
+}
+
+async function processUpload(auth: AuthContext, file: { name: string; bytes: Uint8Array }, signal?: AbortSignal) {
+  // The uploader may have given up while this waited in line: don't do the work for nobody.
+  const check = () => {
+    if (signal?.aborted) throw new AbortedError("upload abandoned");
+  };
+  check();
   const prepared = await prepareDocument(file.bytes); // throws UploadError with a user-facing message
+  check();
   const t0 = Date.now();
   const layout = await extractLayout(prepared.pdf);
+  check();
   const detection = detectFields(layout, { firmName: auth.company.name });
   const detectMs = Date.now() - t0;
 
