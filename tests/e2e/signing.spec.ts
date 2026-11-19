@@ -11,7 +11,7 @@ test("client signs, firm countersigns, File completes", async ({ page, browser }
   // The client signs in a separate, logged-out browser.
   const client = await (await browser.newContext()).newPage();
   await signViaLink(client, clientLink);
-  await expect(client.getByTestId("sign-done")).toContainText("countersigns next");
+  await expect(client.getByTestId("sign-done")).toContainText("signs next");
 
   // Same link again: already signed.
   await client.goto(clientLink);

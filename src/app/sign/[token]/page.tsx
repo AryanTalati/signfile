@@ -22,7 +22,16 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
 
   if (ctx.state !== "sign") {
     const [t] = ctx.file.templateId ? await db.select({ name: schema.templates.name }).from(schema.templates).where(eq(schema.templates.id, ctx.file.templateId)) : [];
-    return <StatePage state={ctx.state} brand={brand} documentName={t?.name ?? "Agreement"} recipientName={ctx.recipient.name} expiresAt={ctx.file.expiresAt?.toISOString() ?? null} />;
+    return (
+      <StatePage
+        state={ctx.state}
+        brand={brand}
+        documentName={t?.name ?? "Agreement"}
+        recipientName={ctx.recipient.name}
+        expiresAt={ctx.file.expiresAt?.toISOString() ?? null}
+        downloadUrl={ctx.state === "completed" && ctx.recipient.status === "signed" ? `/api/sign/${token}/download` : undefined}
+      />
+    );
   }
 
   await markViewed(ctx, await requestMeta());

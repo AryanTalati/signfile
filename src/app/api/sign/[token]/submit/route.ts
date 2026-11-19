@@ -1,6 +1,7 @@
 import { requestMeta } from "@/lib/auth/session";
 import { loadSigning, SigningError, submitSchema, submitSigning } from "@/lib/files/signing";
 import { appUrl } from "@/lib/http/app-url";
+import { sealFile } from "@/lib/files/seal";
 import { fail, json } from "@/lib/http/respond";
 
 export const runtime = "nodejs";
@@ -13,7 +14,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const parsed = submitSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return fail(400, "Something was wrong with that submission. Please try again.");
   try {
-    const out = await submitSigning(ctx, parsed.data, await requestMeta(), await appUrl());
+    const base = await appUrl();
+    const out = await submitSigning(ctx, parsed.data, await requestMeta(), base);
+    // Last signature: seal now, in this request. A failure here never loses the signature;
+    // the File page offers a retry and downloads seal on demand.
+    if (out.completed) await sealFile(ctx.file.id, base).catch((e) => console.error("sealing failed", ctx.file.id, e));
     return json(out);
   } catch (e) {
     if (e instanceof SigningError) return fail(422, e.message);

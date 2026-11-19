@@ -11,7 +11,7 @@ const COPY: Record<Exclude<SigningState, "sign">, (o: { brand: string; doc: stri
   changes_requested: (o) => ({ title: "You requested changes", body: `${o.brand} has your comments and will send a revised version.` }),
 };
 
-export function StatePage({ state, brand, documentName, recipientName, expiresAt }: { state: Exclude<SigningState, "sign">; brand: { name: string; color: string }; documentName: string; recipientName: string; expiresAt: string | null }) {
+export function StatePage({ state, brand, documentName, recipientName, expiresAt, downloadUrl }: { state: Exclude<SigningState, "sign">; brand: { name: string; color: string }; documentName: string; recipientName: string; expiresAt: string | null; downloadUrl?: string }) {
   const exp = expiresAt ? new Date(expiresAt).toLocaleDateString("en-US", { dateStyle: "long", timeZone: "UTC" }) : "";
   const c = COPY[state]({ brand: brand.name, doc: documentName, name: recipientName, exp });
   return (
@@ -22,6 +22,11 @@ export function StatePage({ state, brand, documentName, recipientName, expiresAt
       <div className="mx-auto mt-16 w-full max-w-md px-4 text-center" data-testid={`sign-state-${state}`}>
         <h1 className="text-2xl font-semibold">{c.title}</h1>
         <p className="mt-3 text-muted">{c.body}</p>
+        {state === "completed" && downloadUrl && (
+          <a href={downloadUrl} className="mt-5 inline-block rounded-lg px-5 py-2.5 text-sm font-medium text-white" style={{ background: brand.color }} data-testid="signer-download">
+            Download the signed copy
+          </a>
+        )}
       </div>
     </main>
   );

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Alert, Card } from "@/components/ui";
 import { CopyLink } from "@/components/files/copy-link";
+import { RetrySeal } from "@/components/files/retry-seal";
 import { FileStatus } from "@/components/files/status";
 import { requireAuth } from "@/lib/auth/session";
 import { getFile, signLink } from "@/lib/files/service";
@@ -54,6 +55,18 @@ export default async function FilePage({ params, searchParams }: { params: Promi
         </p>
       </div>
 
+      {file.status === "completed" && (
+        <Card className="flex flex-wrap items-center gap-3 p-4" data-testid="signed-copy">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">{file.finalPdfKey ? "Signed and sealed" : "Signed, sealing pending"}</p>
+            {file.finalSha256 && <p className="break-all font-mono text-xs text-muted">SHA-256 {file.finalSha256}</p>}
+          </div>
+          {file.finalPdfKey ? null : <RetrySeal fileId={file.id} />}
+          <a href={`/api/files/${file.id}/download`} className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white" data-testid="download-signed">
+            Download signed PDF
+          </a>
+        </Card>
+      )}
       {signNowError && <Alert>Couldn&apos;t sign while sending: {signNowError}</Alert>}
       {sent && live[0] && live[0].userId !== auth.user.id && (
         <Alert tone="success">

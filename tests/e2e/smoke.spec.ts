@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectNoPlaceholdersInDocument, expectOnlyOwnFields, loginAsDemo, sendFile, signupFresh, uploadAgreement } from "./helpers";
+import { expectNoPlaceholdersInDocument, expectOnlyOwnFields, loginAsDemo, sendFile, signupFresh, signViaLink, uploadAgreement } from "./helpers";
 
 /**
  * Live-site smoke test: short and gentle on the 0.1-CPU free instance.
@@ -60,4 +60,19 @@ test("client link shows only client fields; another signer's field is rejected",
   const res = c.waitForResponse((r) => r.url().includes("/submit"));
   await c.getByRole("button", { name: "Finish and sign" }).click();
   expect((await res).status()).toBe(422);
+});
+
+test("full path: send, client signs, firm countersigns, sealed PDF verifies", async ({ page, browser }) => {
+  await signupFresh(page, "E2E Smoke Path Co");
+  const { fileUrl, clientLink } = await sendFile(page);
+  await signViaLink(await (await browser.newContext()).newPage(), clientLink);
+  await page.goto(fileUrl);
+  await signViaLink(page, await page.getByTestId("recipient-firm").getByTestId("signing-link").inputValue());
+  await page.goto(fileUrl);
+  await expect(page.getByTestId("signed-copy")).toContainText("Signed and sealed");
+  const res = await page.request.get((await page.getByTestId("download-signed").getAttribute("href"))!);
+  expect(res.status()).toBe(200);
+  await page.goto("/verify");
+  await page.getByTestId("verify-input").setInputFiles({ name: "signed.pdf", mimeType: "application/pdf", buffer: Buffer.from(await res.body()) });
+  await expect(page.getByTestId("verify-result")).toHaveText("Verified: this is an unaltered signed copy.");
 });

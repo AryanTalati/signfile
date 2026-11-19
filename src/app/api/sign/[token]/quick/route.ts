@@ -1,6 +1,7 @@
 import { getAuth, requestMeta } from "@/lib/auth/session";
 import { loadSigning, quickSign, SigningError } from "@/lib/files/signing";
 import { appUrl } from "@/lib/http/app-url";
+import { sealFile } from "@/lib/files/seal";
 import { fail, json } from "@/lib/http/respond";
 import { getSavedSignature } from "@/lib/users/signature";
 
@@ -17,7 +18,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (!saved) return fail(409, "You haven't saved a signature yet.");
   const body = (await req.json().catch(() => ({}))) as { timezone?: string };
   try {
-    return json(await quickSign(ctx, { id: auth.user.id, title: auth.user.title }, saved, await requestMeta(), await appUrl(), typeof body.timezone === "string" ? body.timezone.slice(0, 64) : undefined));
+    const base = await appUrl();
+    const out = await quickSign(ctx, { id: auth.user.id, title: auth.user.title }, saved, await requestMeta(), base, typeof body.timezone === "string" ? body.timezone.slice(0, 64) : undefined);
+    if (out.completed) await sealFile(ctx.file.id, base).catch((e) => console.error("sealing failed", ctx.file.id, e));
+    return json(out);
   } catch (e) {
     if (e instanceof SigningError) return fail(422, e.message);
     console.error("quick sign failed", e);

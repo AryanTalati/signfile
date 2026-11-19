@@ -118,8 +118,13 @@ export function Signer(p: Props) {
           <h1 className="text-2xl font-semibold">You&apos;ve signed</h1>
           <p className="mt-3 text-muted">
             Thanks, {p.recipient.name.split(" ")[0]}.{" "}
-            {done.completed ? `Everyone has signed. ${p.brand.name} will send all parties the signed copy.` : `${done.nextName ?? p.brand.name} countersigns next. You'll get the signed copy when it's complete.`}
+            {done.completed ? `Everyone has signed. ${p.brand.name} will send all parties the signed copy.` : `${done.nextName ?? p.brand.name} signs next. You'll get the signed copy when it's complete.`}
           </p>
+          {done.completed && (
+            <a href={`/api/sign/${p.token}/download`} className="mt-5 inline-block rounded-lg bg-brand px-5 py-2.5 text-sm font-medium text-white" data-testid="signer-download">
+              Download the signed copy
+            </a>
+          )}
         </div>
       </main>
     );

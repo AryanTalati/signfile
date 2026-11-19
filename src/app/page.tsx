@@ -18,6 +18,9 @@ export default async function Home() {
           Log in or try the demo
         </ButtonLink>
       </div>
+      <a href="/verify" className="text-sm text-muted underline">
+        Verify a signed document
+      </a>
     </main>
   );
 }
