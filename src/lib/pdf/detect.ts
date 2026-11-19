@@ -543,6 +543,23 @@ function fitBox(geo: PageGeo, x: number, w: number, h: number, bottom: number) {
  * Regression check (tests + eval): printed characters a field's box overlaps. A field must
  * never cover printed text, or stamped values would sit on top of it.
  */
+/**
+ * Fits a field to the clear space on its page, whatever its origin (an older detection
+ * frozen into a File's snapshot, a hand-placed field, or detection itself): it rests on its
+ * line and never covers printed text. Used by sealing and the signing preview, so both
+ * always stamp into the same, safe boxes.
+ */
+const geoCache = new WeakMap<PageLayout, PageGeo>();
+export function fitToPage(page: PageLayout | undefined, f: FieldDef): FieldDef {
+  if (!page || f.source === "acroform" || f.type === "checkbox") return f;
+  let geo = geoCache.get(page);
+  if (!geo) geoCache.set(page, (geo = pageGeo(page)));
+  const W = page.width, H = page.height;
+  const fit = fitBox(geo, f.x * W, f.w * W, f.h * H, (f.y + f.h) * H + 1);
+  const r = (n: number) => Math.round(n * 10000) / 10000;
+  return { ...f, x: r(fit.x / W), y: r(Math.max(0, fit.y) / H), w: r(Math.min(fit.w, W - fit.x) / W), h: r(fit.h / H) };
+}
+
 export function inkOverlaps(page: PageLayout, f: FieldDef): string[] {
   if (f.source === "acroform") return []; // the document's own form defines that box
   const geo = pageGeo(page);

@@ -41,6 +41,15 @@ test("sealed PDF: values stamped clear of printed text, certificate, verify", as
       if (hit) problems.push(`p${i + 1} stamped "${g.ch}" overlaps printed "${hit.ch}"`);
     }
   }
+  // Stamped images (signatures, initials) must not cover printed text either.
+  for (let i = 0; i < before.length; i++) {
+    const ink = before[i].glyphs.filter((g) => !isBlankCh(g.ch));
+    const newImages = after[i].images.filter((im) => !before[i].images.some((o) => Math.abs(o.x - im.x) < 1 && Math.abs(o.y - im.y) < 1));
+    for (const im of newImages) {
+      const hit = ink.find((o) => overlap(o.x, o.x2, im.x, im.x + im.w) > 0.5 && overlap(o.y, o.baseline, im.y, im.y + im.h) > 0.5);
+      if (hit) problems.push(`p${i + 1} stamped image overlaps printed "${hit.ch}"`);
+    }
+  }
   expect(problems.slice(0, 10)).toEqual([]);
   expect(stampedChars).toContain("JordanExample");
   expect(stampedChars).toMatch(/[A-Z][a-z]+\d{1,2},\d{4}/); // a real date was stamped

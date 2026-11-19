@@ -55,6 +55,8 @@ export interface PageLayout {
   items: TextItem[];
   /** Exact per-character positions (upright text only). */
   glyphs: Glyph[];
+  /** Where images are drawn (e.g. stamped signatures). */
+  images: Rect[];
   hLines: Seg[]; // horizontal, x1 < x2
   vLines: Seg[]; // vertical, y1 < y2
   boxes: Rect[]; // closed rectangles (initials boxes, empty form boxes)
@@ -128,6 +130,7 @@ async function extractPage(page: pdfjs.PDFPageProxy): Promise<PageLayout> {
   let tm: Matrix = [1, 0, 0, 1, 0, 0];
   let lineX = 0, lineY = 0, tx = 0, ty = 0;
   const glyphs: Glyph[] = [];
+  const images: Rect[] = [];
   const moveText = (dx: number, dy: number) => {
     lineX += dx;
     lineY += dy;
@@ -157,7 +160,13 @@ async function extractPage(page: pdfjs.PDFPageProxy): Promise<PageLayout> {
     if (fn === O.save) stack.push({ ctm, ts: { ...ts } });
     else if (fn === O.restore) ({ ctm, ts } = stack.pop() ?? { ctm: [1, 0, 0, 1, 0, 0], ts });
     else if (fn === O.transform) ctm = mul(ctm, args as Matrix);
-    else if (fn === O.beginText) {
+    else if (fn === O.paintImageXObject || fn === O.paintInlineImageXObject || fn === O.paintImageMaskXObject) {
+      // Images are drawn into the unit square under the current CTM.
+      const m = mul(vt, ctm);
+      const pts = [apply(m, 0, 0), apply(m, 1, 0), apply(m, 0, 1), apply(m, 1, 1)];
+      const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+      images.push({ x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) });
+    } else if (fn === O.beginText) {
       tm = [1, 0, 0, 1, 0, 0];
       lineX = lineY = tx = ty = 0;
     } else if (fn === O.setFont) ts.size = Math.abs((args as [unknown, number])[1]) || ts.size;
@@ -218,6 +227,7 @@ async function extractPage(page: pdfjs.PDFPageProxy): Promise<PageLayout> {
     rotation,
     items: items.sort((a, b) => a.baseline - b.baseline || a.x - b.x),
     glyphs,
+    images,
     hLines: dedupeSegs(hLines, "h"),
     vLines: dedupeSegs(vLines, "v"),
     boxes,

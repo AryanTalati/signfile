@@ -1,12 +1,12 @@
 import "server-only";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { degrees, PDFDocument, PDFFont, PDFPage, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, PDFFont, rgb, StandardFonts } from "pdf-lib";
 import { db, schema } from "@/lib/db/client";
 import { recordEmail } from "@/lib/email/outbox";
-import type { FieldDef, PageInfo } from "@/lib/fields/types";
 import { sha256 } from "@/lib/pdf/prepare";
-import { getObject, putObject } from "@/lib/storage";
-import { formatSignedDate } from "./signing";
+import { deleteObjects, getObject, putObject } from "@/lib/storage";
+import { formatSignedDate } from "@/lib/fields/format";
+import { stampAll } from "@/lib/pdf/stamp";
 
 /**
  * Sealing: stamp every value onto the agreement, append the audit certificate,
@@ -18,9 +18,12 @@ import { formatSignedDate } from "./signing";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export async function sealFile(fileId: string, baseUrl: string): Promise<{ finalSha256: string; alreadySealed: boolean }> {
-  return db.transaction(async (tx) => {
-    // Lock the File row: concurrent completions/downloads can't seal twice.
-    const [file] = await tx.select().from(schema.files).where(eq(schema.files.id, fileId)).for("update");
+  {
+    // Read and build OUTSIDE any transaction: the heavy work (download, layout, stamping,
+    // upload) must not hold a pooled connection or a row lock. The short write transaction
+    // at the end re-checks under a row lock, so a File is still sealed exactly once.
+    const tx = db;
+    const [file] = await tx.select().from(schema.files).where(eq(schema.files.id, fileId));
     if (!file) throw new Error("File not found");
     if (file.finalPdfKey && file.finalSha256) return { finalSha256: file.finalSha256, alreadySealed: true };
     if (file.status !== "completed") throw new Error("Only completed Files can be sealed");
@@ -58,14 +61,7 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
       if (f.type === "firm_fill") values[f.id] = (file.firmValues ?? {})[f.firmFillKey ?? f.id] ?? "";
       if (f.type === "agreement_date") values[f.id] = formatSignedDate(completedAt, lastSigner?.timezone);
     }
-    const pages = pdf.getPages();
-    for (const f of doc.fields) {
-      const v = values[f.id];
-      if (!v) continue;
-      const page = pages[f.page - 1];
-      if (!page) continue;
-      await stampField(pdf, page, doc.pages[f.page - 1], f, v, { font, dingbats });
-    }
+    await stampAll(pdf, original, doc.pages, doc.fields, values, { font, dingbats });
 
     await appendCertificate(pdf, {
       font,
@@ -101,69 +97,23 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
     pdf.setModificationDate(completedAt);
     const final = await pdf.save();
     const finalSha256 = sha256(final);
-    const finalKey = `${file.companyId}/files/${fileId}/final/signed-${fileId}.pdf`;
+    const finalKey = `${file.companyId}/files/${fileId}/final/signed-${fileId}-${Date.now().toString(36)}.pdf`;
     await putObject(finalKey, final, "application/pdf");
+    const pageCount = pdf.getPageCount();
 
-    await tx.update(schema.files).set({ finalPdfKey: finalKey, finalSha256, updatedAt: new Date() }).where(and(eq(schema.files.id, fileId), isNull(schema.files.finalPdfKey)));
-    await tx.insert(schema.events).values({ companyId: file.companyId, fileId, actorType: "system", type: "file.sealed", data: { finalSha256, pages: pdf.getPageCount(), documentSha256: doc.pdfSha256 } });
-    await emailSignedCopy(tx, { file, signers, firm: company?.name ?? "", documentName: template?.name ?? "the agreement", finalKey, baseUrl });
-    return { finalSha256, alreadySealed: false };
-  });
-}
-
-// ---------- stamping ----------
-
-/** Maps a point on the displayed page (top-left origin, points) to PDF user space for the page's rotation. */
-function toUser(info: PageInfo, dx: number, dy: number): [number, number] {
-  const { width: w, height: h } = info;
-  switch (info.rotation) {
-    case 90:
-      return [dy, dx];
-    case 180:
-      return [w - dx, dy];
-    case 270:
-      return [w - dy, h - dx];
-    default:
-      return [dx, h - dy];
+    return db.transaction(async (wtx) => {
+      const [cur] = await wtx.select().from(schema.files).where(eq(schema.files.id, fileId)).for("update");
+      if (cur.finalPdfKey && cur.finalSha256) {
+        // Someone else sealed it meanwhile: keep theirs, discard ours.
+        await deleteObjects([finalKey]).catch(() => undefined);
+        return { finalSha256: cur.finalSha256, alreadySealed: true };
+      }
+      await wtx.update(schema.files).set({ finalPdfKey: finalKey, finalSha256, updatedAt: new Date() }).where(and(eq(schema.files.id, fileId), isNull(schema.files.finalPdfKey)));
+      await wtx.insert(schema.events).values({ companyId: file.companyId, fileId, actorType: "system", type: "file.sealed", data: { finalSha256, pages: pageCount, documentSha256: doc.pdfSha256 } });
+      await emailSignedCopy(wtx, { file, signers, firm: company?.name ?? "", documentName: template?.name ?? "the agreement", finalKey, baseUrl });
+      return { finalSha256, alreadySealed: false };
+    });
   }
-}
-
-async function stampField(pdf: PDFDocument, page: PDFPage, info: PageInfo, f: FieldDef, value: string, fonts: { font: PDFFont; dingbats: PDFFont }) {
-  const W = info.rotation % 180 ? info.height : info.width; // displayed size
-  const H = info.rotation % 180 ? info.width : info.height;
-  const bx = f.x * W, by = f.y * H, bw = f.w * W, bh = f.h * H;
-  const rot = degrees(info.rotation);
-
-  if (value.startsWith("data:image/png")) {
-    const img = await pdf.embedPng(Buffer.from(value.split(",")[1], "base64"));
-    const scale = Math.min(bw / img.width, bh / img.height);
-    const iw = img.width * scale, ih = img.height * scale;
-    // Bottom-left of the image, in displayed space: rests on the field's line.
-    const [x, y] = toUser(info, bx, by + bh);
-    page.drawImage(img, { x, y, width: iw, height: ih, rotate: rot });
-    return;
-  }
-  if (f.type === "checkbox") {
-    if (value !== "true") return;
-    const size = Math.min(bh, bw) * 0.9;
-    const [x, y] = toUser(info, bx + (bw - size * 0.8) / 2, by + bh - (bh - size) / 2 - size * 0.1);
-    page.drawText("4", { x, y, size, font: fonts.dingbats, rotate: rot }); // ✔ in ZapfDingbats
-    return;
-  }
-  // Text: rests on the line, ≤ 11 pt, shrinks to fit the box width.
-  let size = Math.min(bh * 0.8, 11);
-  const text = value.replace(/\s+/g, " ").trim();
-  while (size > 5 && fonts.font.widthOfTextAtSize(text, size) > bw - 2) size -= 0.5;
-  const baseline = by + bh - Math.max(1.5, size * 0.2);
-  const [x, y] = toUser(info, bx + 1, baseline);
-  page.drawText(fit(text, fonts.font, size, bw - 2), { x, y, size, font: fonts.font, rotate: rot, color: rgb(0.05, 0.05, 0.1) });
-}
-
-function fit(text: string, font: PDFFont, size: number, max: number) {
-  if (font.widthOfTextAtSize(text, size) <= max) return text;
-  let t = text;
-  while (t.length > 1 && font.widthOfTextAtSize(t + "…", size) > max) t = t.slice(0, -1);
-  return t + "…";
 }
 
 // ---------- certificate ----------

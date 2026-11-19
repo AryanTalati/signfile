@@ -7,7 +7,10 @@ import { recordEmail } from "@/lib/email/outbox";
 import type { FieldDef } from "@/lib/fields/types";
 import { hasNoSigner } from "@/lib/fields/types";
 import { getObject } from "@/lib/storage";
+import { fitToPage } from "@/lib/pdf/detect";
+import { extractLayout } from "@/lib/pdf/extract";
 import { signLink } from "./service";
+import { formatSignedDate } from "@/lib/fields/format";
 
 /**
  * Public signing, authorized only by the recipient's link token. Nothing here
@@ -98,6 +101,8 @@ export async function signingView(ctx: SigningContext) {
   }
   for (const o of others) for (const [k, v] of Object.entries(o.values ?? {})) shown[k] = String(v);
   const pages = doc.pages.map((p, i) => ({ page: i + 1, width: p.rotation % 180 ? p.height : p.width, height: p.rotation % 180 ? p.width : p.height }));
+  // Same fitted boxes as sealing, so the preview always matches the final PDF.
+  doc.fields = await fittedFields(doc.id, doc.pdfKey, doc.fields);
   const prefill: Record<string, string> = {};
   for (const f of mine) {
     if (f.type === "full_name") prefill[f.id] = ctx.recipient.name;
@@ -105,6 +110,18 @@ export async function signingView(ctx: SigningContext) {
     if (f.type === "company") prefill[f.id] = ctx.recipient.roleKey === "firm" ? ctx.company.name : ctx.file.clientLegalName;
   }
   return { documentSha: doc.pdfSha256, pages, fields: doc.fields, mine, shown, prefill };
+}
+
+// Fitted fields per document version (immutable once sent), cached per process.
+const fittedCache = new Map<string, FieldDef[]>();
+async function fittedFields(documentId: string, pdfKey: string, fields: FieldDef[]) {
+  const hit = fittedCache.get(documentId);
+  if (hit) return hit;
+  const layout = await extractLayout(new Uint8Array(await getObject(pdfKey)));
+  const out = fields.map((f) => fitToPage(layout[f.page - 1], f));
+  if (fittedCache.size > 200) fittedCache.clear();
+  fittedCache.set(documentId, out);
+  return out;
 }
 
 export async function signingPdf(ctx: SigningContext) {
@@ -275,14 +292,7 @@ export async function submitSigning(
   });
 }
 
-/** "November 20, 2026" in the signer's time zone (falls back to UTC). */
-export function formatSignedDate(d: Date, tz?: string | null) {
-  try {
-    return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: tz || "UTC" });
-  } catch {
-    return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
-  }
-}
+export { formatSignedDate };
 
 export type SigningField = FieldDef;
 
