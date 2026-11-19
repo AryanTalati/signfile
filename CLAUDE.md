@@ -77,6 +77,8 @@ Calendar: Phase 1 = Nov 18–20, Phase 2 = Nov 21, Phase 3 = Nov 22, Phase 4 = N
 
 **Phase 4**: MIND sync on completion (Company → Client → File → Agreement version → key terms → signers → signed date); onboarding checklist; pricing page (no billing); data export + per-client deletion; help page; end-to-end testing.
 
+**Backlog (agreed, not started)**: template delete/archive on the Templates page.
+
 **Only if ahead**: approved-answers library (per company + agreement version, `{{fee}}` placeholders, clause hashes → "needs review"), email intake to draft a File, our own MCP server.
 
 ## Deliberately left out

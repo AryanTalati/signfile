@@ -83,10 +83,34 @@ test("Scanned PDF: no fields found, append a signature page, ready to send", asy
   await uploadAgreement(page, "fixtures/agreements/pdf-scanned.pdf");
   await expect(page.getByText("We didn't find any signature fields")).toBeVisible();
   await expect(page.getByText("It looks scanned")).toBeVisible();
+  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Append a signature page" }).click();
   await expect(fields(page)).toHaveCount(8, { timeout: 90_000 });
   await expect(page.getByTestId("page-3")).toBeVisible();
   await expect(page.getByTestId("ready")).toBeVisible();
+
+  // Undo: remove the added page; a field placed elsewhere survives.
+  await page.getByRole("toolbar", { name: "Add a field" }).getByRole("button", { name: "Initials" }).click();
+  const p1 = page.getByTestId("page-1");
+  const b = (await p1.boundingBox())!;
+  await p1.click({ position: { x: b.width * 0.5, y: b.height * 0.3 } });
+  await expect(fields(page)).toHaveCount(9);
+  await expect(page.getByTestId("save-state")).toHaveText("All changes saved", { timeout: 15_000 });
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Remove the added signature page" }).click();
+  await expect(page.getByTestId("page-3")).toHaveCount(0, { timeout: 90_000 });
+  await expect(fields(page)).toHaveCount(1);
+  await expect(page.locator('[data-testid="field"][data-field-type="initials"]')).toHaveCount(1);
+});
+
+test("Cancelling the append confirmation changes nothing", async ({ page }) => {
+  await signupFresh(page);
+  await uploadAgreement(page, "fixtures/agreements/pdf-scanned.pdf");
+  page.once("dialog", (d) => d.dismiss());
+  await page.getByRole("button", { name: "Append a signature page" }).click();
+  await expect(page.getByText("We didn't find any signature fields")).toBeVisible();
+  await expect(page.getByTestId("page-3")).toHaveCount(0);
+  await expect(fields(page)).toHaveCount(0);
 });
 
 test("Scanned PDF: place fields by hand", async ({ page }) => {

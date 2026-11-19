@@ -38,6 +38,7 @@ test("upload PDF + DOCX, edit and save, scanned-PDF fallback", async ({ page }) 
   // Scanned PDF: nothing detected, append a signature page.
   await uploadAgreement(page, "fixtures/agreements/pdf-scanned.pdf");
   await expect(page.getByText("We didn't find any signature fields")).toBeVisible();
+  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Append a signature page" }).click();
   await expect(fields).toHaveCount(8, { timeout: 60_000 });
   await expect(page.getByTestId("ready")).toBeVisible();

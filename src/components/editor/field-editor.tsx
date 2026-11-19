@@ -247,6 +247,10 @@ export function FieldEditor(props: EditorProps) {
   }
 
   async function appendPage() {
+    const ok = window.confirm(
+      "Add a signature page to the end of this agreement?\n\nIt adds one page with signature, name, title and date for each signer. You can remove it again from this editor.",
+    );
+    if (!ok) return;
     setAppending(true);
     await saveNow();
     appendingRef.current = true; // pause autosave until the editor remounts with the new PDF
@@ -259,6 +263,26 @@ export function FieldEditor(props: EditorProps) {
       return;
     }
     router.refresh(); // remounts the editor with the new PDF and fields
+  }
+
+  async function removePage() {
+    const onPage = fields.filter((f) => f.source === "appended" || f.page === props.pages.length).length;
+    const ok = window.confirm(
+      `Remove the added signature page?\n\nThe page and the ${onPage} field${onPage === 1 ? "" : "s"} on it will be removed. Your other fields stay as they are.`,
+    );
+    if (!ok) return;
+    setAppending(true);
+    await saveNow();
+    appendingRef.current = true;
+    const res = await fetch(`/api/templates/${props.templateId}/signature-page`, { method: "DELETE" });
+    setAppending(false);
+    if (!res.ok) {
+      appendingRef.current = false;
+      const data = await res.json().catch(() => ({}));
+      setBanner(data.error ?? "Couldn't remove the signature page.");
+      return;
+    }
+    router.refresh();
   }
 
   function scrollTo(f: FieldDef) {
@@ -454,6 +478,11 @@ export function FieldEditor(props: EditorProps) {
             <p className="mb-3 text-sm text-green-700" data-testid="ready">
               ✓ Ready to send
             </p>
+          )}
+          {props.signaturePageAppended && (
+            <button type="button" onClick={removePage} disabled={appending} className="mb-3 block text-sm text-red-700 hover:underline disabled:opacity-60">
+              {appending ? "Working…" : "Remove the added signature page"}
+            </button>
           )}
           {!props.signaturePageAppended && !noFields && (
             <button type="button" onClick={appendPage} disabled={appending} className="mb-3 text-sm text-brand hover:underline disabled:opacity-60">

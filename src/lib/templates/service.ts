@@ -212,6 +212,43 @@ export async function saveTemplate(auth: AuthContext, templateId: string, input:
   return { fields, roles, problems: validateFields(fields, roles, t.version.pageCount) };
 }
 
+// ---------- remove an appended signature page ----------
+
+/**
+ * Undoes "append a signature page": rebuilds the PDF from the original upload
+ * (always kept), drops the fields that came with the page or were placed on it,
+ * keeps every other field. Goes through the processing queue (DOCX re-converts).
+ */
+export function removeSignaturePageFromTemplate(auth: AuthContext, templateId: string) {
+  return exclusive(async () => {
+    const t = await getTemplate(auth, templateId);
+    if (!t) return null;
+    if (!t.version.signaturePageAppended) return { notAppended: true as const };
+    const prepared = await prepareDocument(new Uint8Array(await getObject(t.version.sourceKey)));
+    const pdfKey = `${auth.company.id}/templates/${templateId}/v${t.version.version}/document-${Date.now()}.pdf`;
+    await putObject(pdfKey, prepared.pdf, "application/pdf");
+    const before = t.version.fields ?? [];
+    const fields = before.filter((f) => f.source !== "appended" && f.page <= prepared.pages.length);
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.templateVersions)
+        .set({ pdfKey, pdfSha256: prepared.pdfSha256, pages: prepared.pages, pageCount: prepared.pages.length, fields, signaturePageAppended: false })
+        .where(and(eq(schema.templateVersions.id, t.version.id), eq(schema.templateVersions.companyId, auth.company.id)));
+      await tx.update(schema.templates).set({ updatedAt: new Date() }).where(eq(schema.templates.id, templateId));
+      await tx.insert(schema.events).values({
+        companyId: auth.company.id,
+        actorType: "user",
+        actorId: auth.user.id,
+        actorLabel: auth.user.name,
+        type: "template.signature_page_removed",
+        data: { templateId, fieldsRemoved: before.length - fields.length },
+      });
+    });
+    await deleteObjects([t.version.pdfKey]).catch(() => undefined);
+    return { pageCount: prepared.pages.length, fieldsRemoved: before.length - fields.length };
+  });
+}
+
 // ---------- append signature page ----------
 
 export async function appendSignaturePageToTemplate(auth: AuthContext, templateId: string) {
