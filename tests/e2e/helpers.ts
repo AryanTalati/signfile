@@ -37,6 +37,8 @@ export async function sendFile(page: Page, fixture = "fixtures/agreements/pdf-tw
   await page.getByLabel("Client's legal name").fill(client.company);
   await page.getByLabel("Name", { exact: true }).fill(client.name);
   await page.getByLabel("Email").fill(client.email);
+  // Any "Filled by you" values the template needs (fee, dates…).
+  for (const input of await page.locator('input[name^="firm:"]').all()) await input.fill("2026-11-19");
   await page.getByRole("button", { name: "Send for signature" }).click();
   await page.waitForURL(/\/files\/[0-9a-f-]{36}\?sent=1/);
   return { fileUrl: page.url().replace("?sent=1", ""), clientLink: await page.getByTestId("signing-link").first().inputValue() };
