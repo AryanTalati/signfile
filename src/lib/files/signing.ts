@@ -276,3 +276,48 @@ export function formatSignedDate(d: Date, tz?: string | null) {
 }
 
 export type SigningField = FieldDef;
+
+/**
+ * One-click countersign: the logged-in user named on this signer slot signs with their saved
+ * signature. Consent is recorded as usual, values are built on the server (saved signature and
+ * initials, name/title/company prefilled), then the normal signing path runs (same locks, events).
+ * Throws SigningError if a required field can't be filled automatically: the UI falls back.
+ */
+export async function quickSign(
+  ctx: SigningContext,
+  user: { id: string; title: string | null },
+  saved: { signature: string; initials: string },
+  meta: { ip: string | null; userAgent: string | null },
+  baseUrl: string,
+  timezone?: string,
+) {
+  if (ctx.state !== "sign") throw new SigningError("This link can't be signed right now.");
+  if (!ctx.recipient.userId || ctx.recipient.userId !== user.id) throw new SigningError("Only the countersigner named on this File can use their saved signature.");
+  const view = await signingView(ctx);
+  const values: Record<string, string> = {};
+  for (const f of view.mine) {
+    if (hasNoSigner(f.type) || f.type === "date_signed") continue;
+    if (f.type === "signature") values[f.id] = saved.signature;
+    else if (f.type === "initials") values[f.id] = saved.initials;
+    else if (view.prefill[f.id]) values[f.id] = view.prefill[f.id];
+    else if (f.type === "title" && user.title) values[f.id] = user.title;
+    else if (f.required) throw new SigningError(`"${f.label}" needs to be filled in by hand.`);
+  }
+  await recordConsent(ctx, meta);
+  const fresh = await loadSigning(ctx.recipient.token);
+  if (!fresh || fresh.state !== "sign") throw new SigningError("This link can't be signed right now.");
+  const out = await submitSigning(fresh, { values, timezone }, meta, baseUrl);
+  await db.insert(schema.events).values({
+    companyId: ctx.file.companyId,
+    fileId: ctx.file.id,
+    recipientId: ctx.recipient.id,
+    actorType: "user",
+    actorId: user.id,
+    actorLabel: ctx.recipient.name,
+    type: "recipient.signed_with_saved_signature",
+    data: {},
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
+  return out;
+}

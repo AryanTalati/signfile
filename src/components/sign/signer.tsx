@@ -18,6 +18,8 @@ interface Props {
   myRole: string;
   shown: Record<string, string>;
   prefill: Record<string, string>;
+  /** Present when the logged-in user is this signer (countersigner). */
+  quick: { savedSignature: string | null } | null;
 }
 
 const INPUT_TYPES = new Set(["full_name", "title", "company", "text"]);
@@ -41,6 +43,20 @@ export function Signer(p: Props) {
   const todo = mine.filter((f) => f.type !== "date_signed" && f.required && !(values[f.id] ?? "").trim());
   const fillable = mine.filter((f) => f.type !== "date_signed");
   const doneCount = fillable.filter((f) => (values[f.id] ?? "").trim()).length;
+
+  async function quickSign() {
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/sign/${p.token}/quick`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) return setError(`${data.error ?? "That didn't work."} You can sign the usual way below.`);
+    setDone(data);
+  }
 
   async function consent() {
     setBusy(true);
@@ -124,8 +140,29 @@ export function Signer(p: Props) {
               <p className="mt-1">{p.consentText}</p>
             </div>
             {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
-            <button type="button" onClick={consent} disabled={busy} className="mt-4 w-full rounded-lg bg-brand px-4 py-3 font-medium text-white disabled:opacity-60">
-              {busy ? "One moment…" : "I agree, review the agreement"}
+            {p.quick?.savedSignature && (
+              <div className="mt-4 rounded-lg border border-border p-3" data-testid="quick-sign">
+                <p className="text-sm font-medium">Countersign with your saved signature</p>
+                {/* eslint-disable-next-line @next/next/no-img-element -- data URL */}
+                <img src={p.quick.savedSignature} alt="Your saved signature" className="mt-2 h-10 max-w-56 object-contain object-left" />
+                <p className="mt-2 text-xs text-muted">Your name, title and today&apos;s date are filled in for you.</p>
+                <button type="button" onClick={quickSign} disabled={busy} className="mt-3 w-full rounded-lg bg-brand px-4 py-3 font-medium text-white disabled:opacity-60">
+                  {busy ? "Signing…" : "I agree, sign with my saved signature"}
+                </button>
+              </div>
+            )}
+            {p.quick && !p.quick.savedSignature && (
+              <p className="mt-3 text-xs text-muted">
+                Tip: save your signature in <a href="/settings" className="underline">Settings</a> to countersign in one click next time.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={consent}
+              disabled={busy}
+              className={`mt-4 w-full rounded-lg px-4 py-3 font-medium disabled:opacity-60 ${p.quick?.savedSignature ? "border border-border" : "bg-brand text-white"}`}
+            >
+              {busy ? "One moment…" : p.quick?.savedSignature ? "Review and sign the usual way" : "I agree, review the agreement"}
             </button>
           </div>
         </div>

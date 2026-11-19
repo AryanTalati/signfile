@@ -77,6 +77,11 @@ export default async function FilePage({ params, searchParams }: { params: Promi
                 {RECIPIENT_STATUS[r.status] ?? r.status}
               </span>
             </div>
+            {(r.status === "active" || r.status === "viewed") && r.userId === auth.user.id && (
+              <a href={`/sign/${r.token}`} className="self-start rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white" data-testid="countersign-now">
+                Countersign now
+              </a>
+            )}
             {(r.status === "active" || r.status === "viewed") && <CopyLink url={signLink(base, r.token)} />}
           </div>
         ))}

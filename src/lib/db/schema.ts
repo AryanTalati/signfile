@@ -83,6 +83,10 @@ export const users = pgTable(
     title: text("title"),
     role: userRole("role").notNull().default("member"),
     passwordHash: text("password_hash").notNull(),
+    /** Adopted signature/initials (PNG data URLs) for one-click countersigning. */
+    savedSignature: text("saved_signature"),
+    savedInitials: text("saved_initials"),
+    savedSignatureAt: ts("saved_signature_at"),
     createdAt: createdAt(),
     lastLoginAt: ts("last_login_at"),
   },

@@ -36,6 +36,13 @@
       "when": 1795040935558,
       "tag": "0004_purge_company_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795121675059,
+      "tag": "0005_saved_signature",
+      "breakpoints": true
     }
   ]
 }

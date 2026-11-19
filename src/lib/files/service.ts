@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { AuthContext } from "@/lib/auth/session";
 import { requestMeta } from "@/lib/auth/session";
@@ -218,6 +218,23 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
 async function defaultCountersignerId(auth: AuthContext) {
   const [c] = await db.select({ id: schema.companies.defaultCountersignerId }).from(schema.companies).where(eq(schema.companies.id, auth.company.id));
   return c?.id ?? null;
+}
+
+/** Files waiting on the current user's countersignature. */
+export async function listAwaitingMe(auth: AuthContext) {
+  return db
+    .select({ fileId: schema.files.id, clientLegalName: schema.files.clientLegalName, token: schema.recipients.token })
+    .from(schema.recipients)
+    .innerJoin(schema.files, eq(schema.files.id, schema.recipients.fileId))
+    .where(
+      and(
+        eq(schema.recipients.companyId, auth.company.id),
+        eq(schema.recipients.userId, auth.user.id),
+        inArray(schema.recipients.status, ["active", "viewed"]),
+        inArray(schema.files.status, ["sent", "partially_signed"]),
+      ),
+    )
+    .limit(50);
 }
 
 export async function listFiles(auth: AuthContext) {

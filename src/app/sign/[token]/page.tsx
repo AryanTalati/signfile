@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Caveat } from "next/font/google";
 import { notFound } from "next/navigation";
-import { requestMeta } from "@/lib/auth/session";
+import { getAuth, requestMeta } from "@/lib/auth/session";
+import { getSavedSignature } from "@/lib/users/signature";
 import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { CONSENT_TEXT, loadSigning, markViewed, signingView } from "@/lib/files/signing";
@@ -26,6 +27,10 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
 
   await markViewed(ctx, await requestMeta());
   const view = await signingView(ctx);
+  // One-click countersign: only for the logged-in user named on this signer slot.
+  const auth = await getAuth();
+  const isMe = !!auth && !!ctx.recipient.userId && auth.user.id === ctx.recipient.userId && auth.company.id === ctx.file.companyId;
+  const saved = isMe ? await getSavedSignature(auth!.user.id) : null;
   const [t] = ctx.file.templateId ? await db.select({ name: schema.templates.name }).from(schema.templates).where(eq(schema.templates.id, ctx.file.templateId)) : [];
   return (
     <div className={sigFont.variable}>
@@ -42,6 +47,7 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
         myRole={ctx.recipient.roleKey}
         shown={view.shown}
         prefill={view.prefill}
+        quick={isMe ? { savedSignature: saved?.signature ?? null } : null}
       />
     </div>
   );
