@@ -7,6 +7,7 @@ import { sha256 } from "@/lib/pdf/prepare";
 import { deleteObjects, getObject, putObject } from "@/lib/storage";
 import { formatSignedDate } from "@/lib/fields/format";
 import { stampAll } from "@/lib/pdf/stamp";
+import { eventLabel } from "./event-labels";
 
 /**
  * Sealing: stamp every value onto the agreement, append the audit certificate,
@@ -89,7 +90,7 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
         signedAt: s.signedAt,
         signature: Object.entries(s.values ?? {}).find(([k, val]) => typeof val === "string" && val.startsWith("data:image/png") && doc.fields.find((x) => x.id === k)?.type === "signature")?.[1] as string | undefined,
       })),
-      events: events.map((e) => ({ at: e.createdAt, type: e.type, actor: e.actorLabel ?? e.actorType, ip: e.ip })),
+      events: events.map((e) => ({ at: e.createdAt, type: e.type, actor: e.actorLabel ?? e.actorType, ip: e.ip, data: e.data })),
     });
 
     pdf.setTitle(`${template?.name ?? "Agreement"} (signed)`);
@@ -142,17 +143,6 @@ function local(d: Date | null, tz: string | null) {
   }
 }
 
-const EVENT_TEXT: Record<string, string> = {
-  "file.created": "File created",
-  "file.sent": "Sent for signature",
-  "recipient.viewed": "Opened the signing link",
-  "recipient.consented": "Agreed to sign electronically (ESIGN/UETA)",
-  "recipient.signed": "Signed",
-  "recipient.signed_with_saved_signature": "Used their saved signature",
-  "recipient.activated": "Next signer's link activated",
-  "file.completed": "All parties signed",
-  "file.expired": "Links expired",
-};
 
 async function appendCertificate(
   pdf: PDFDocument,
@@ -170,7 +160,7 @@ async function appendCertificate(
     documentVersion: number;
     verifyUrl: string;
     signers: CertSigner[];
-    events: { at: Date; type: string; actor: string; ip: string | null }[];
+    events: { at: Date; type: string; actor: string; ip: string | null; data: Record<string, unknown> }[];
   },
 ) {
   const W = 612, H = 792, M = 54;
@@ -237,7 +227,7 @@ async function appendCertificate(
   text("Event log (UTC)", M, 11, c.bold);
   y -= 18;
   for (const e of c.events) {
-    const line = `${utc(e.at)}  ${EVENT_TEXT[e.type] ?? e.type}  ·  ${e.actor}${e.ip ? `  ·  IP ${e.ip}` : ""}`;
+    const line = `${utc(e.at)}  ${eventLabel({ type: e.type, actorLabel: e.actor, data: e.data })}${e.ip ? `  ·  IP ${e.ip}` : ""}`;
     for (const l of wrapText(line, c.font, 8, W - 2 * M)) {
       ensure(11);
       text(l, M, 8);

@@ -20,6 +20,11 @@ test("void: reason required, links stop working, signer emailed, logged", async 
   await expect(page.getByText("Reason: Client chose a different scope")).toBeVisible();
   await expect(page.getByText(/Voided: "/)).toBeVisible(); // email to the signer in the File's emails
   await expect(page.getByTestId("file-actions")).toHaveCount(0);
+  // Timeline: plain English, never raw event names.
+  const labels = await page.getByTestId("timeline-label").allInnerTexts();
+  expect(labels).toContain("Voided by Test Admin: Client chose a different scope");
+  expect(labels.some((l) => l.startsWith("Sent to Jamie Example"))).toBe(true);
+  for (const l of labels) expect(l).not.toMatch(/\b[a-z]+\.[a-z_]+\b/);
 
   const c = await (await browser.newContext()).newPage();
   await c.goto(clientLink);

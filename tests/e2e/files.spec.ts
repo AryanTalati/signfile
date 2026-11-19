@@ -27,7 +27,7 @@ test("create and send a File: link shown immediately, signers and outbox recorde
   await expect(page.getByTestId("recipient-client").getByTestId("recipient-status")).toHaveText("Link sent, not opened");
   await expect(page.getByTestId("recipient-firm").getByTestId("recipient-status")).toHaveText("Waiting for earlier signer");
   await expect(page.getByText("Not sent (outbox only)")).toBeVisible();
-  await expect(page.getByText("Sent for signature")).toBeVisible();
+  await expect(page.getByText("Sent to Jamie Example for signature")).toBeVisible();
 
   // It's on the Files list.
   await page.goto("/dashboard");

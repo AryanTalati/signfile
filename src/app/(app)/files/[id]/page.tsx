@@ -6,6 +6,7 @@ import { CopyLink } from "@/components/files/copy-link";
 import { RetrySeal } from "@/components/files/retry-seal";
 import { FileActions } from "@/components/files/file-actions";
 import { LocalTime } from "@/components/local-time";
+import { eventLabel } from "@/lib/files/event-labels";
 import { FileStatus } from "@/components/files/status";
 import { requireAuth } from "@/lib/auth/session";
 import { getFile, signLink } from "@/lib/files/service";
@@ -13,10 +14,6 @@ import { appUrl } from "@/lib/http/app-url";
 
 export const metadata: Metadata = { title: "File · signfile" };
 
-const EVENT_LABEL: Record<string, string> = {
-  "file.created": "File created",
-  "file.sent": "Sent for signature",
-};
 
 const RECIPIENT_STATUS: Record<string, string> = {
   waiting: "Waiting for earlier signer",
@@ -120,8 +117,9 @@ export default async function FilePage({ params, searchParams }: { params: Promi
           <ol className="divide-y divide-border">
             {events.map((e) => (
               <li key={e.id} className="px-4 py-2.5 text-sm">
-                <span className="font-medium">{EVENT_LABEL[e.type] ?? e.type}</span>
-                <span className="text-muted"> · {e.actorLabel ?? e.actorType}</span>
+                <span className="font-medium" data-testid="timeline-label">
+                  {eventLabel(e)}
+                </span>
                 <span className="block text-xs text-muted">{fmt(e.createdAt)}</span>
               </li>
             ))}
