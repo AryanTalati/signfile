@@ -4,8 +4,8 @@ import postgres from "postgres";
 import * as schema from "./schema";
 
 /**
- * App database client. DATABASE_URL is Supabase's transaction pooler, which
- * doesn't support prepared statements, so prepare:false is mandatory.
+ * App database client. DATABASE_URL is Supabase's session pooler (port 5432).
+ * prepare:false is kept (works in either pooler mode).
  *
  * Created lazily (so `next build` works without DATABASE_URL) and cached on
  * globalThis (so dev hot reload doesn't leak connections).
@@ -17,7 +17,11 @@ function instance() {
   if (!g.__sfDb) {
     const url = process.env.DATABASE_URL;
     if (!url) throw new Error("DATABASE_URL is not set");
-    const sql = postgres(url, { prepare: false, max: 5, idle_timeout: 20, connect_timeout: 10 });
+    // Session pooler: every client connection holds one of the pool's server connections
+    // (Supabase default pool size: 15 per role+db). Budget in DECISIONS.md: 3 here + 1 health
+    // check per process, so a deploy overlap plus local tools stays under 15.
+    const max = Math.min(Math.max(Number(process.env.DB_POOL_MAX) || 3, 1), 10);
+    const sql = postgres(url, { prepare: false, max, idle_timeout: 20, max_lifetime: 60 * 30, connect_timeout: 10 });
     g.__sfDb = { sql, db: drizzle(sql, { schema }) };
   }
   return g.__sfDb;
