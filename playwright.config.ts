@@ -8,14 +8,17 @@ import { defineConfig, devices } from "@playwright/test";
  */
 const external = process.env.E2E_BASE_URL;
 const PORT = 3100;
+/** A deployed site (not localhost/Docker): run only the short smoke test, one worker, desktop. */
+const live = !!external && !/localhost|127\.0\.0\.1/.test(external);
 
 export default defineConfig({
   testDir: "tests/e2e",
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: true,
-  // A deployed free-tier instance has 0.1 CPU: 2 workers is a realistic load; local/Docker runs use all cores.
-  workers: external && !/localhost|127\.0\.0\.1/.test(external) ? 2 : undefined,
+  // The free instance has 0.1 CPU: the live smoke test runs serially; local/Docker runs use all cores.
+  workers: live ? 1 : undefined,
+  testMatch: live ? /smoke\.spec\.ts/ : undefined,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
   globalTeardown: "./tests/e2e/global-teardown.ts",
@@ -23,10 +26,12 @@ export default defineConfig({
     baseURL: external ?? `http://localhost:${PORT}`,
     trace: "retain-on-failure",
   },
-  projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-    { name: "phone", use: { ...devices["Pixel 7"] } },
-  ],
+  projects: live
+    ? [{ name: "desktop", use: { ...devices["Desktop Chrome"] } }]
+    : [
+        { name: "desktop", use: { ...devices["Desktop Chrome"] } },
+        { name: "phone", use: { ...devices["Pixel 7"] } },
+      ],
   webServer: external
     ? undefined
     : {
