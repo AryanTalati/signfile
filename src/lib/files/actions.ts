@@ -80,6 +80,13 @@ export async function resendSigningEmail(auth: AuthContext, fileId: string, base
     const [doc] = await tx.select({ roles: schema.fileDocuments.roles }).from(schema.fileDocuments).where(eq(schema.fileDocuments.id, file.currentDocumentId!));
     const [t] = file.templateId ? await tx.select({ name: schema.templates.name }).from(schema.templates).where(eq(schema.templates.id, file.templateId)) : [];
     const brand = { name: auth.company.name, color: auth.company.brandColor };
+    // Who signed most recently on this document (named in countersign reminders).
+    const [lastSigner] = await tx
+      .select({ name: schema.recipients.name })
+      .from(schema.recipients)
+      .where(and(eq(schema.recipients.fileId, fileId), eq(schema.recipients.documentId, file.currentDocumentId!), eq(schema.recipients.status, "signed")))
+      .orderBy(desc(schema.recipients.signedAt))
+      .limit(1);
     const sent: string[] = [];
     for (const r of live) {
       const [last] = await tx
@@ -96,7 +103,7 @@ export async function resendSigningEmail(auth: AuthContext, fileId: string, base
         ? signRequestEmail({ brand, recipientName: r.name, documentName: t?.name ?? "the agreement", clientLegalName: file.clientLegalName, link, expiresAt: file.expiresAt ?? new Date(Date.now() + 30 * 86_400_000), senderName: auth.user.name, countersign: false })
         : isFirmFirst(doc?.roles) && file.status === "sent"
           ? firmSignFirstEmail({ brand, recipientName: r.name, documentName: t?.name ?? "the agreement", clientLegalName: file.clientLegalName, link })
-          : countersignRequestEmail({ brand, recipientName: r.name, documentName: t?.name ?? "the agreement", clientLegalName: file.clientLegalName, link });
+          : countersignRequestEmail({ brand, recipientName: r.name, documentName: t?.name ?? "the agreement", signerName: lastSigner?.name ?? file.clientLegalName, signerCompany: lastSigner ? file.clientLegalName : null, link });
       await recordEmail(tx, { companyId: auth.company.id, fileId, recipientId: r.id, kind: "resend", toEmail: r.email, toName: r.name, ...email, subject: `Reminder: ${email.subject}` });
       await tx.insert(schema.events).values({ companyId: auth.company.id, fileId, recipientId: r.id, actorType: "user", actorId: auth.user.id, actorLabel: auth.user.name, type: "file.resent", data: { to: r.name, email: r.email }, ip, userAgent });
       sent.push(r.name);

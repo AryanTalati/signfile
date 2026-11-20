@@ -271,7 +271,7 @@ export async function submitSigning(
       // The firm countersigns after the client; the client signs after the firm ("firm signs when sending").
       const isFirm = next.userId !== null;
       const email = isFirm
-        ? countersignRequestEmail({ brand, recipientName: next.name, documentName: docName, clientLegalName: ctx.file.clientLegalName, link: signLink(baseUrl, next.token) })
+        ? countersignRequestEmail({ brand, recipientName: next.name, documentName: docName, signerName: ctx.recipient.name, signerCompany: ctx.file.clientLegalName, link: signLink(baseUrl, next.token) })
         : signRequestEmail({
             brand,
             recipientName: next.name,
@@ -279,7 +279,7 @@ export async function submitSigning(
             clientLegalName: ctx.file.clientLegalName,
             link: signLink(baseUrl, next.token),
             expiresAt: ctx.file.expiresAt ?? new Date(Date.now() + 30 * 86_400_000),
-            senderName: ctx.company.name,
+            senderName: ctx.recipient.name, // the firm signer who just signed, never the firm name
             countersign: false,
           });
       await recordEmail(tx, { companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: next.id, kind: isFirm ? "countersign_request" : "sign_request", toEmail: next.email, toName: next.name, ...email });

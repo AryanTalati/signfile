@@ -47,15 +47,32 @@ ${button(o.brand, o.link, "Review and sign")}`,
   return { subject, html, text };
 }
 
-export function countersignRequestEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string; link: string }) {
-  const subject = `Countersign: ${o.clientLegalName} signed "${o.documentName}"`;
+/**
+ * Who just signed, for email copy: the signer's name, plus their company if one was entered,
+ * never the firm's own name (if the client company equals the firm name, it's left out).
+ */
+export function signerLabel(name: string, company: string | null | undefined, firmName: string) {
+  const c = (company ?? "").trim();
+  // Compare ignoring case, punctuation and legal suffixes ("Acme Rentals LLC" is "Acme Rentals").
+  const key = (x: string) =>
+    x
+      .toLowerCase()
+      .replace(/\b(llc|inc|ltd|limited|corp|corporation|co|company|plc|gmbh|llp|lp)\b\.?/g, "")
+      .replace(/[^a-z0-9]/g, "");
+  const same = key(c) === key(firmName);
+  return c && !same ? `${name} (${c})` : name;
+}
+
+export function countersignRequestEmail(o: { brand: Brand; recipientName: string; documentName: string; signerName: string; signerCompany?: string | null; link: string }) {
+  const who = signerLabel(o.signerName, o.signerCompany, o.brand.name);
+  const subject = `Countersign: ${who} signed "${o.documentName}"`;
   const html = layout(
     o.brand,
     `<p>Hi ${esc(o.recipientName.split(" ")[0])},</p>
-<p><strong>${esc(o.clientLegalName)}</strong> has signed <strong>${esc(o.documentName)}</strong>. It's ready for your countersignature.</p>
+<p><strong>${esc(who)}</strong> has signed <strong>${esc(o.documentName)}</strong>. It's ready for your countersignature.</p>
 ${button(o.brand, o.link, "Review and countersign")}`,
   );
-  const text = `${o.clientLegalName} has signed "${o.documentName}". Countersign: ${o.link}`;
+  const text = `${who} has signed "${o.documentName}". Countersign: ${o.link}`;
   return { subject, html, text };
 }
 

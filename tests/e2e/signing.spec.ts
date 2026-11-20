@@ -22,7 +22,7 @@ test("client signs, firm countersigns, File completes", async ({ page, browser }
   await expect(page.getByTestId("file-status")).toHaveText("Waiting for countersign");
   await expect(page.getByTestId("recipient-client").getByTestId("recipient-status")).toHaveText("Signed");
   const firmLink = await page.getByTestId("recipient-firm").getByTestId("signing-link").inputValue();
-  await expect(page.getByText(/Countersign: Globex Test Industries Ltd signed/)).toBeVisible();
+  await expect(page.getByText(/Countersign: Jamie Example \(Globex Test Industries Ltd\) signed/)).toBeVisible();
 
   const firm = await (await browser.newContext()).newPage();
   await signViaLink(firm, firmLink);
