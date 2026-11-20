@@ -4,7 +4,8 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { AuthContext } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
-import { FIELD_TYPES, hasNoSigner, type FieldDef } from "@/lib/fields/types";
+import { FIELD_TYPES, hasNoSigner, type FieldDef, type RoleDef } from "@/lib/fields/types";
+import { matchFields } from "@/lib/pdf/match";
 import { detectFields } from "@/lib/pdf/detect";
 import { DEFAULT_ROLES, rolesFor, validateFields } from "@/lib/fields/validate";
 import { extractLayout } from "@/lib/pdf/extract";
@@ -74,6 +75,30 @@ async function processUpload(auth: AuthContext, file: { name: string; bytes: Uin
   const layout = await extractLayout(prepared.pdf);
   check();
   const detection = detectFields(layout, { firmName: auth.company.name });
+  // Revision: match the new fields to the previous version's (by meaning, not position) and
+  // carry over the previous version's signers' roles and order.
+  let revision: { fields: FieldDef[]; roles: RoleDef[]; match: Record<string, unknown> } | null = null;
+  if (reviseFileId) {
+    const [prev] = await db
+      .select({ fields: schema.fileDocuments.fields, roles: schema.fileDocuments.roles, pdfKey: schema.fileDocuments.pdfKey })
+      .from(schema.files)
+      .innerJoin(schema.fileDocuments, eq(schema.fileDocuments.id, schema.files.currentDocumentId))
+      .where(and(eq(schema.files.id, reviseFileId), eq(schema.files.companyId, auth.company.id)));
+    if (prev) {
+      const prevLayout = await extractLayout(new Uint8Array(await getObject(prev.pdfKey)));
+      const m = matchFields(prev.fields, prevLayout, detection.fields, layout);
+      revision = {
+        fields: m.fields,
+        roles: prev.roles,
+        match: {
+          clean: m.clean,
+          summary: m.summary,
+          flagged: m.matches.filter((x) => x.status !== "matched").map((x) => ({ id: x.field.id, status: x.status })),
+          missing: m.missing.map((f) => ({ label: f.label, type: f.type, roleKey: f.roleKey })),
+        },
+      };
+    }
+  }
   const detectMs = Date.now() - t0;
 
   const templateId = randomUUID();
@@ -98,8 +123,8 @@ async function processUpload(auth: AuthContext, file: { name: string; bytes: Uin
       pdfSha256: prepared.pdfSha256,
       pageCount: prepared.pages.length,
       pages: prepared.pages,
-      roles: detection.roles,
-      fields: detection.fields,
+      roles: revision?.roles ?? detection.roles,
+      fields: revision?.fields ?? detection.fields,
       detection: {
         method: "rules",
         outcome: detection.outcome,
@@ -109,6 +134,7 @@ async function processUpload(auth: AuthContext, file: { name: string; bytes: Uin
         conversionMs: prepared.conversionMs ?? null,
         detectMs,
         detectedCount: detection.fields.length,
+        ...(revision ? { match: revision.match } : {}),
       },
       createdById: auth.user.id,
     });

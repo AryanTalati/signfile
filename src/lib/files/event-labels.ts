@@ -26,7 +26,8 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
   "recipient.activated": (e) => (str(e.data?.name) ? `${str(e.data?.name)}'s turn to sign` : "Next signer's turn"),
   "recipient.declined": (e) => `Declined by ${who(e)}${str(e.data?.reason) ? `: ${str(e.data?.reason)}` : ""}`,
   "recipient.requested_changes": (e) => `${who(e)} requested changes${str(e.data?.message) ? `: ${str(e.data?.message)}` : ""}`,
-  "file.revised": (e) => `Revised version ${String(e.data?.toVersion ?? "")} sent by ${who(e)}; version ${String(e.data?.fromVersion ?? "")} superseded`.replace("version  ", "version "),
+  "file.revised": (e) =>
+    `Revised version ${String(e.data?.toVersion ?? "")} sent by ${who(e)}; version ${String(e.data?.fromVersion ?? "")} superseded${str(e.data?.note) ? `. What changed: ${str(e.data?.note)}` : ""}`,
   "file.completed": () => "All parties signed",
   "file.sealed": () => "Signed PDF sealed with its certificate",
   "file.expired": () => "Signing links expired",

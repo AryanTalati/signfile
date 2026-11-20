@@ -9,10 +9,10 @@ import { and, eq } from "drizzle-orm";
 
 export const metadata: Metadata = { title: "Set up fields · signfile" };
 
-export default async function TemplateEditorPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ new?: string }> }) {
+export default async function TemplateEditorPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ new?: string; focus?: string }> }) {
   const auth = await requireAuth();
   const { id } = await params;
-  const { new: isNew } = await searchParams;
+  const { new: isNew, focus } = await searchParams;
   const t = await getTemplate(auth, id);
   if (!t) notFound();
   const v = t.version;
@@ -37,6 +37,11 @@ export default async function TemplateEditorPage({ params, searchParams }: { par
       firmName={auth.company.name}
       isNew={isNew === "1"}
       reviseFile={rev ?? null}
+      focusIds={
+        focus && rev
+          ? ((v.detection as { match?: { flagged?: { id: string }[] } } | null)?.match?.flagged ?? []).map((f) => f.id).filter((fid) => v.fields.some((x) => x.id === fid && !x.reviewed))
+          : null
+      }
     />
   );
 }

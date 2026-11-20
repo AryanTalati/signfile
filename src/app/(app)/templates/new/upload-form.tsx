@@ -45,11 +45,11 @@ export function UploadForm({ reviseFile }: { reviseFile?: string }) {
     xhr.upload.onprogress = (e) => e.lengthComputable && setPhase({ kind: "uploading", pct: Math.round((e.loaded / e.total) * 100) });
     xhr.upload.onload = () => setPhase({ kind: "processing", started: Date.now() });
     xhr.onload = () => {
-      let data: { id?: string; error?: string } = {};
+      let data: { id?: string; error?: string; reviseFile?: string | null } = {};
       try {
         data = JSON.parse(xhr.responseText);
       } catch {}
-      if (xhr.status === 201 && data.id) router.push(`/templates/${data.id}?new=1`);
+      if (xhr.status === 201 && data.id) router.push(data.reviseFile ? `/files/${data.reviseFile}/revise?template=${data.id}` : `/templates/${data.id}?new=1`);
       else if (xhr.status === 503 && attempt < BUSY_RETRIES) {
         // Server is processing other documents: wait our turn instead of failing.
         setPhase({ kind: "queued", attempt: attempt + 1 });

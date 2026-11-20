@@ -1,5 +1,48 @@
 [
   {
+    "file": "pdf-two-column-revised.pdf",
+    "format": "pdf",
+    "firmName": "Northwind Example Labs",
+    "clientName": "Hooli Test Systems",
+    "description": "Revised version of pdf-two-column: one more clause (the signature block moves down) and a new client Initials line.",
+    "outcome": "fields",
+    "blocks": [
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed"
+        ]
+      },
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed",
+          "initials"
+        ]
+      }
+    ],
+    "traps": [
+      "Used by the revision-matching test: moved fields must match by meaning, the new Initials field must be flagged"
+    ],
+    "check": {
+      "pages": 2,
+      "textChars": 3658,
+      "rotations": [
+        0,
+        0
+      ],
+      "sizeKb": 4
+    }
+  },
+  {
     "file": "pdf-compact-blocks.pdf",
     "format": "pdf",
     "firmName": "Example Digital Consulting LLC",

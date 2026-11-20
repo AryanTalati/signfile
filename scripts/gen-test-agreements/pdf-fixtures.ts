@@ -41,10 +41,11 @@ export async function pdfDrawnLines(firm: string, client: string) {
 }
 
 /** Two signature blocks side by side; party labels PROVIDER / CUSTOMER, underscores as text. */
-export async function pdfTwoColumn(firm: string, client: string) {
+export async function pdfTwoColumn(firm: string, client: string, revised = false) {
   const w = await Writer.create();
   intro(w, "Professional Services Agreement", firm, client, "Provider", "Customer");
-  clauses(w, 6);
+  // The revised variant adds a clause (moving the whole signature block) and a client initials line.
+  clauses(w, revised ? 7 : 6);
   w.ensure(260);
   w.gap(20);
   w.para("IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.", { after: 24 });
@@ -57,7 +58,7 @@ export async function pdfTwoColumn(firm: string, client: string) {
     let y = top;
     w.text(c.head, c.x, y, { bold: true, size: 10 });
     w.text(c.name, c.x, (y -= 14), { size: 10 });
-    for (const label of ["By:", "Name:", "Title:", "Date:"]) {
+    for (const label of ["By:", "Name:", "Title:", "Date:", ...(revised && c.head === "CUSTOMER" ? ["Initials:"] : [])]) {
       y -= 30;
       w.text(`${label} ______________________________`, c.x, y, { size: 10 });
     }

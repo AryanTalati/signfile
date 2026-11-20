@@ -20,13 +20,23 @@ export class ReviseError extends Error {}
  *  - the same people sign again in the same roles; whoever signed the old version must sign again
  *  - everyone is emailed: the first signer gets the new link, later signers a notice
  */
-export async function reviseAndResend(auth: AuthContext, fileId: string, revisionTemplateId: string, baseUrl: string) {
+export async function reviseAndResend(
+  auth: AuthContext,
+  fileId: string,
+  revisionTemplateId: string,
+  baseUrl: string,
+  opts: { note?: string | null; firmValues?: Record<string, string> } = {},
+) {
+  const note = opts.note?.trim().slice(0, 2000) || null;
   const t = await getTemplate(auth, revisionTemplateId);
   if (!t || t.template.revisionForFileId !== fileId) throw new ReviseError("That revised version doesn't belong to this File.");
   const v = t.version;
   const roles = v.roles ?? [];
   const problems = validateFields(v.fields, roles, v.pageCount);
   if (problems.length) throw new ReviseError(`The revised version isn't ready: ${problems[0]}`);
+  const flagged = ((v.detection as { match?: { flagged?: { id: string }[] } } | null)?.match?.flagged ?? []).map((x) => x.id);
+  const unreviewed = v.fields.filter((f) => flagged.includes(f.id) && !f.reviewed);
+  if (unreviewed.length) throw new ReviseError(`Review the ${unreviewed.length} flagged field${unreviewed.length > 1 ? "s" : ""} first.`);
 
   const [file] = await db.select().from(schema.files).where(and(eq(schema.files.id, fileId), eq(schema.files.companyId, auth.company.id)));
   if (!file) throw new ReviseError("File not found.");
@@ -107,7 +117,7 @@ export async function reviseAndResend(auth: AuthContext, fileId: string, revisio
 
     await tx
       .update(schema.files)
-      .set({ status: "sent", currentDocumentId: documentId, sentAt: now, expiresAt, completedAt: null, updatedAt: now })
+      .set({ status: "sent", currentDocumentId: documentId, sentAt: now, expiresAt, completedAt: null, updatedAt: now, firmValues: { ...(file.firmValues ?? {}), ...(opts.firmValues ?? {}) } })
       .where(eq(schema.files.id, fileId));
     await tx.insert(schema.events).values([
       {
@@ -117,7 +127,7 @@ export async function reviseAndResend(auth: AuthContext, fileId: string, revisio
         actorId: auth.user.id,
         actorLabel: auth.user.name,
         type: "file.revised",
-        data: { fromVersion: oldDoc.versionNo, toVersion: versionNo, supersededDocumentSha256: oldDoc.pdfSha256, documentSha256: v.pdfSha256 },
+        data: { fromVersion: oldDoc.versionNo, toVersion: versionNo, supersededDocumentSha256: oldDoc.pdfSha256, documentSha256: v.pdfSha256, note },
         ip,
         userAgent,
       },
@@ -140,8 +150,8 @@ export async function reviseAndResend(auth: AuthContext, fileId: string, revisio
       const email = r.active
         ? r.userId
           ? firmSignFirstEmail({ brand, recipientName: r.name, documentName, clientLegalName: file.clientLegalName, link })
-          : signRequestEmail({ brand, recipientName: r.name, documentName, clientLegalName: file.clientLegalName, link, expiresAt, senderName: auth.user.name, countersign: false, revised: { version: versionNo, signAgain: r.signAgain } })
-        : revisionNoticeEmail({ brand, recipientName: r.name, documentName, clientLegalName: file.clientLegalName, version: versionNo, signAgain: r.signAgain });
+          : signRequestEmail({ brand, recipientName: r.name, documentName, clientLegalName: file.clientLegalName, link, expiresAt, senderName: auth.user.name, countersign: false, revised: { version: versionNo, signAgain: r.signAgain, note } })
+        : revisionNoticeEmail({ brand, recipientName: r.name, documentName, clientLegalName: file.clientLegalName, version: versionNo, signAgain: r.signAgain, note });
       await recordEmail(tx, { companyId: auth.company.id, fileId, recipientId: r.id, kind: r.active ? "sign_request" : "revision_notice", toEmail: r.email, toName: r.name, ...email });
     }
   });

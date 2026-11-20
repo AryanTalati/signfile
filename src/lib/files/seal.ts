@@ -227,7 +227,10 @@ async function appendCertificate(
   text("Event log (UTC)", M, 11, c.bold);
   y -= 18;
   for (const e of c.events) {
-    const line = `${utc(e.at)}  ${eventLabel({ type: e.type, actorLabel: e.actor, data: e.data })}${e.ip ? `  ·  IP ${e.ip}` : ""}`;
+    // The revision note can quote the earlier version's change request: it stays in the audit
+    // trail and timeline, but the certificate describes only the signed version.
+    const data = e.type === "file.revised" ? { ...e.data, note: null } : e.data;
+    const line = `${utc(e.at)}  ${eventLabel({ type: e.type, actorLabel: e.actor, data })}${e.ip ? `  ·  IP ${e.ip}` : ""}`;
     for (const l of wrapText(line, c.font, 8, W - 2 * M)) {
       ensure(11);
       text(l, M, 8);

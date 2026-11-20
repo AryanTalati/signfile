@@ -61,6 +61,19 @@ type Gen = { exp: Omit<FixtureExpectation, "check">; make: () => Promise<Uint8Ar
 const fixtures: Gen[] = [
   {
     exp: {
+      file: "pdf-two-column-revised.pdf", format: "pdf", firmName: "Northwind Example Labs", clientName: "Hooli Test Systems",
+      description: "Revised version of pdf-two-column: one more clause (the signature block moves down) and a new client Initials line.",
+      outcome: "fields",
+      blocks: [
+        { role: "firm", page: "last", types: ["signature", "full_name", "title", "date_signed"] },
+        { role: "client", page: "last", types: ["signature", "full_name", "title", "date_signed", "initials"] },
+      ],
+      traps: ["Used by the revision-matching test: moved fields must match by meaning, the new Initials field must be flagged"],
+    },
+    make: () => pdfTwoColumn("Northwind Example Labs", "Hooli Test Systems", true),
+  },
+  {
+    exp: {
       file: "pdf-compact-blocks.pdf", format: "pdf", firmName: "Example Digital Consulting LLC", clientName: "Northwind Test Traders",
       description: "Tightly set (Times, 13 pt leading): long sentence before the Effective Date blank, party headings directly above compact signature blocks, second compact block on page 2 (Exhibit A).",
       outcome: "fields",

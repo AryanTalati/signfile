@@ -23,6 +23,8 @@ export interface EditorProps {
   isNew: boolean;
   /** Set when this is a revised version uploaded for one File. */
   reviseFile?: { id: string; client: string } | null;
+  /** Focus mode (revisions): only these fields are shown and editable. */
+  focusIds?: string[] | null;
 }
 
 type Save = { state: "saved" | "dirty" | "saving" | "error"; message?: string };
@@ -295,6 +297,7 @@ export function FieldEditor(props: EditorProps) {
   }
 
   const sel = fields.find((f) => f.id === selected) ?? null;
+  const focus = props.focusIds ? new Set(props.focusIds) : null;
   const flagged = fields.filter(needsReview);
   const counts = { client: fields.filter((f) => f.roleKey === "client").length, firm: fields.filter((f) => f.roleKey === "firm").length };
   const noFields = fields.length === 0;
@@ -337,6 +340,16 @@ export function FieldEditor(props: EditorProps) {
           )}
         </div>
 
+        {focus && (
+          <div className="mb-3">
+            <Alert tone="info">
+              Showing only the {focus.size} field{focus.size === 1 ? "" : "s"} that changed. Move or edit {focus.size === 1 ? "it" : "them"}, or press &quot;Looks right&quot;.{" "}
+              <a className="underline" href={`/templates/${props.templateId}`}>
+                Show all fields
+              </a>
+            </Alert>
+          </div>
+        )}
         {props.isNew && !noFields && (
           <div className="mb-3">
             <Alert tone="info">
@@ -402,7 +415,7 @@ export function FieldEditor(props: EditorProps) {
                 }}
               >
                 {fields
-                  .filter((f) => f.page === page.page)
+                  .filter((f) => f.page === page.page && (!focus || focus.has(f.id)))
                   .map((f) => (
                     <FieldBox key={f.id} f={f} selected={f.id === selected} onPointerDown={(e, mode) => startDrag(e, f, mode)} />
                   ))}
@@ -513,7 +526,18 @@ export function FieldEditor(props: EditorProps) {
             </ButtonLink>
           )}
           {props.reviseFile && (
-            <ResendRevision fileId={props.reviseFile.id} client={props.reviseFile.client} templateId={props.templateId} disabled={problems.length > 0 || appending} flush={saveNow} />
+            <a
+              href={`/files/${props.reviseFile.id}/revise?template=${props.templateId}`}
+              onClick={async (e) => {
+                e.preventDefault();
+                await saveNow();
+                router.push(`/files/${props.reviseFile!.id}/revise?template=${props.templateId}`);
+              }}
+              className="mb-2 block w-full rounded-lg bg-brand px-4 py-2.5 text-center text-sm font-medium text-white"
+              data-testid="back-to-revision"
+            >
+              Back to the revised version for {props.reviseFile.client}
+            </a>
           )}
           <ButtonLink href="/templates" variant="secondary" className="w-full">
             Done
@@ -702,30 +726,3 @@ function SaveBadge({ save, onRetry }: { save: Save; onRetry: () => void }) {
   );
 }
 
-function ResendRevision({ fileId, client, templateId, disabled, flush }: { fileId: string; client: string; templateId: string; disabled: boolean; flush: () => Promise<void> }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  return (
-    <div className="mb-2">
-      <Button
-        className="w-full"
-        disabled={disabled || busy}
-        data-testid="resend-revision"
-        onClick={async () => {
-          setBusy(true);
-          setError(null);
-          await flush();
-          const res = await fetch(`/api/files/${fileId}/revise`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ templateId }) });
-          const data = await res.json().catch(() => ({}));
-          setBusy(false);
-          if (!res.ok) return setError(data.error ?? "Couldn't send the revised version.");
-          router.push(`/files/${fileId}?revised=1`);
-        }}
-      >
-        {busy ? "Sending…" : `Resend revised version to ${client}`}
-      </Button>
-      {error && <p className="mt-1 text-sm text-red-700">{error}</p>}
-    </div>
-  );
-}

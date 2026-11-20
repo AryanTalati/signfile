@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
   try {
     const { templateId, detection } = await createTemplateFromUpload(auth, { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }, req.signal, reviseFile);
-    return json({ id: templateId, outcome: detection.outcome, fields: detection.fields.length, warnings: detection.warnings }, 201);
+    return json({ id: templateId, reviseFile: reviseFile ?? null, outcome: detection.outcome, fields: detection.fields.length, warnings: detection.warnings }, 201);
   } catch (e) {
     if (e instanceof UploadError) return fail(422, e.message, { code: e.code });
     if (e instanceof RevisionError) return fail(409, e.message);
