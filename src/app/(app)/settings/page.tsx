@@ -18,7 +18,7 @@ export default async function SettingsPage() {
   const [saved, [company]] = await Promise.all([
     getSavedSignature(auth.user.id),
     db
-      .select({ enabled: schema.companies.remindersEnabled, days: schema.companies.reminderDays, finalDays: schema.companies.finalReminderDays, expiry: schema.companies.linkExpiryDays })
+      .select({ enabled: schema.companies.remindersEnabled, days: schema.companies.reminderDays, finalDays: schema.companies.finalReminderDays, expiry: schema.companies.linkExpiryDays, timezone: schema.companies.timezone })
       .from(schema.companies)
       .where(eq(schema.companies.id, auth.company.id)),
   ]);
@@ -40,9 +40,9 @@ export default async function SettingsPage() {
       </Card>
       {auth.user.role === "admin" && company && (
         <Card className="p-5">
-          <h2 className="font-semibold">Reminders and expiry</h2>
+          <h2 className="font-semibold">Reminders, expiry and time zone</h2>
           <p className="mt-1 text-sm text-muted">For your whole firm. Reminders go to whoever&apos;s turn it is and stop once the File is signed, voided, declined or has changes requested.</p>
-          <RemindersForm enabled={company.enabled} days={(company.days ?? []).join(", ")} finalDays={company.finalDays} expiry={company.expiry} />
+          <RemindersForm enabled={company.enabled} days={(company.days ?? []).join(", ")} finalDays={company.finalDays} expiry={company.expiry} timezone={company.timezone} />
         </Card>
       )}
     </div>

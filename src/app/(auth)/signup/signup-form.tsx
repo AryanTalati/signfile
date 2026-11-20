@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { Alert, Button, Card, Field } from "@/components/ui";
+import { TimeZoneInput } from "@/components/time-zone-input";
 import { signupAction, type FormState } from "../actions";
 
 export function SignupForm() {
@@ -16,6 +17,7 @@ export function SignupForm() {
         <p className="mb-5 mt-1 text-sm text-muted">You&apos;ll be the admin. You can invite your team after.</p>
         <form action={action} className="flex flex-col gap-4" noValidate>
           {state.error && <Alert>{state.error}</Alert>}
+          <TimeZoneInput />
           <Field label="Company name" name="companyName" autoComplete="organization" required defaultValue={v.companyName} error={fe.companyName} />
           <Field label="Your name" name="name" autoComplete="name" required defaultValue={v.name} error={fe.name} />
           <Field label="Work email" name="email" type="email" autoComplete="email" required defaultValue={v.email} error={fe.email} />

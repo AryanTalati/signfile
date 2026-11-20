@@ -38,6 +38,7 @@ async function main() {
       password: DEMO.password,
       brandColor: DEMO.brandColor,
       slug: DEMO.slug,
+      timezone: "America/Denver",
     }));
     console.log(`created demo company ${DEMO.companyName} (${companyId})`);
   }

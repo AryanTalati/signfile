@@ -1,4 +1,5 @@
 import "server-only";
+import { validTimeZone } from "@/lib/time";
 import { eq, sql } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth/password";
 import { db, schema } from "@/lib/db/client";
@@ -27,6 +28,8 @@ export const normalizeEmail = (email: string) => email.trim().toLowerCase();
  * the company's default countersigner until they pick someone else.
  */
 export async function createCompanyWithAdmin(input: {
+  /** IANA time zone from the browser at signup. */
+  timezone?: string | null;
   companyName: string;
   name: string;
   email: string;
@@ -102,7 +105,7 @@ async function insertCompany(
 
     const [company] = await tx
       .insert(schema.companies)
-      .values({ name: input.companyName.trim(), slug, ...(input.brandColor ? { brandColor: input.brandColor } : {}) })
+      .values({ name: input.companyName.trim(), slug, timezone: validTimeZone(input.timezone), ...(input.brandColor ? { brandColor: input.brandColor } : {}) })
       .returning();
     const [user] = await tx
       .insert(schema.users)

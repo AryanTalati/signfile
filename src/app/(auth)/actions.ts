@@ -39,7 +39,7 @@ export async function signupAction(_: FormState, fd: FormData): Promise<FormStat
   if (Object.keys(fieldErrors).length || !parsed.success) return { fieldErrors, values };
 
   try {
-    const { companyId, userId } = await createCompanyWithAdmin(parsed.data);
+    const { companyId, userId } = await createCompanyWithAdmin({ ...parsed.data, timezone: str(fd, "timezone") });
     await startSession(userId, companyId);
   } catch (e) {
     if (e instanceof EmailTakenError) return { fieldErrors: { email: "An account with that email already exists. Log in instead." }, values };

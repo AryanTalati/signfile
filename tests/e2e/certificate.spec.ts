@@ -50,4 +50,11 @@ test("certificate shows each signer's title as used in the signed document", asy
   expect(certificate).toMatch(/Title\s+Managing Partner/);
   expect(certificate).not.toMatch(/Title\s+CEO/); // not the profile title
   expect(certificate).toContain("Title changed from CEO to Managing Partner by Test Admin");
+
+  // Times: UTC first, then the firm's time zone (taken from the browser at signup).
+  const stamp = String.raw`\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC / [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d\d:\d\d [AP]M MST`;
+  expect(certificate).toMatch(new RegExp(`Completed ${stamp}`));
+  expect(certificate).toContain("Event log (UTC / America/Phoenix)");
+  expect(certificate).toMatch(new RegExp(`${stamp}\\s+All parties signed`));
+  expect(certificate).not.toMatch(/UTC (?!\/)[A-Z][a-z]+ /); // no event line with UTC only
 });

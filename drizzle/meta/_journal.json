@@ -71,6 +71,13 @@
       "when": 1795210000000,
       "tag": "0009_auto_countersign",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795220000000,
+      "tag": "0010_company_timezone",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import { deleteObjects, getObject, putObject } from "@/lib/storage";
 import { formatSignedDate } from "@/lib/fields/format";
 import { signedTitle } from "@/lib/fields/signer-details";
 import { stampAll } from "@/lib/pdf/stamp";
+import { utcAndLocal, validTimeZone } from "@/lib/time";
 import { eventLabel } from "./event-labels";
 
 /**
@@ -37,7 +38,7 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
       .where(and(eq(schema.recipients.fileId, fileId), eq(schema.recipients.documentId, doc.id), eq(schema.recipients.status, "signed")))
       .orderBy(asc(schema.recipients.signingOrder));
     const events = await tx.select().from(schema.events).where(eq(schema.events.fileId, fileId)).orderBy(asc(schema.events.id));
-    const [company] = await tx.select({ name: schema.companies.name }).from(schema.companies).where(eq(schema.companies.id, file.companyId));
+    const [company] = await tx.select({ name: schema.companies.name, timezone: schema.companies.timezone }).from(schema.companies).where(eq(schema.companies.id, file.companyId));
     const [template] = file.templateId ? await tx.select({ name: schema.templates.name }).from(schema.templates).where(eq(schema.templates.id, file.templateId)) : [];
 
     const original = await getObject(doc.pdfKey);
@@ -74,6 +75,7 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
       client: file.clientLegalName,
       reference: file.reference,
       completedAt,
+      firmTimezone: validTimeZone(company?.timezone),
       sourceSha256: doc.sourceSha256,
       documentSha256: doc.pdfSha256,
       documentVersion: doc.versionNo,
@@ -134,16 +136,8 @@ interface CertSigner {
   signature?: string;
 }
 
-const utc = (d: Date | null) => (d ? d.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC") : "-");
-function local(d: Date | null, tz: string | null) {
-  if (!d || !tz) return "";
-  try {
-    return `${d.toLocaleString("en-US", { timeZone: tz, dateStyle: "medium", timeStyle: "long" })} (${tz})`;
-  } catch {
-    return "";
-  }
-}
-
+/** UTC first, then local time in `tz` ("2026-11-20 23:19:37 UTC / Nov 20, 2026, 4:19:37 PM MST"). */
+const when = (d: Date | null, tz: string | null) => (d ? utcAndLocal(d, tz) : "-");
 
 async function appendCertificate(
   pdf: PDFDocument,
@@ -156,6 +150,8 @@ async function appendCertificate(
     client: string;
     reference: string | null;
     completedAt: Date;
+    /** Shown next to UTC for the completion time, the event log and signers without their own zone. */
+    firmTimezone: string | null;
     sourceSha256: string;
     documentSha256: string;
     documentVersion: number;
@@ -193,7 +189,7 @@ async function appendCertificate(
   row("Document", `${c.documentName} (version ${c.documentVersion})`);
   row("Between", `${c.firm} and ${c.client}`);
   if (c.reference) row("Reference", c.reference);
-  row("Status", `Completed ${utc(c.completedAt)}`);
+  row("Status", `Completed ${when(c.completedAt, c.firmTimezone)}`);
   row("Source file SHA-256", c.sourceSha256);
   row("Agreement PDF SHA-256", c.documentSha256);
   row("Signed PDF SHA-256", `Recorded when sealed; check this file at ${c.verifyUrl}`);
@@ -208,8 +204,11 @@ async function appendCertificate(
     row("Role", s.role);
     row("Email", s.email);
     if (s.title) row("Title", s.title);
-    row("Agreed to e-sign", [utc(s.consentAt), local(s.consentAt, s.timezone)].filter(Boolean).join(" / "));
-    row("Signed", [utc(s.signedAt), local(s.signedAt, s.timezone)].filter(Boolean).join(" / "));
+    // Each signer's own browser time zone; the firm's for signers without one.
+    const tz = s.timezone ?? c.firmTimezone;
+    row("Agreed to e-sign", when(s.consentAt, tz));
+    row("Signed", when(s.signedAt, tz));
+    if (tz) row("Time zone", s.timezone ? `${s.timezone} (their browser at signing)` : `${tz} (${c.firm}'s time zone)`);
     row("IP address", s.ip ?? "not recorded");
     row("Browser", (s.userAgent ?? "not recorded").slice(0, 220));
     if (s.signature) {
@@ -225,13 +224,13 @@ async function appendCertificate(
 
   ensure(40);
   y -= 6;
-  text("Event log (UTC)", M, 11, c.bold);
+  text(c.firmTimezone ? `Event log (UTC / ${c.firmTimezone})` : "Event log (UTC)", M, 11, c.bold);
   y -= 18;
   for (const e of c.events) {
     // The revision note can quote the earlier version's change request: it stays in the audit
     // trail and timeline, but the certificate describes only the signed version.
     const data = e.type === "file.revised" ? { ...e.data, note: null } : e.data;
-    const line = `${utc(e.at)}  ${eventLabel({ type: e.type, actorLabel: e.actor, data })}${e.ip ? `  ·  IP ${e.ip}` : ""}`;
+    const line = `${when(e.at, c.firmTimezone)}  ${eventLabel({ type: e.type, actorLabel: e.actor, data })}${e.ip ? `  ·  IP ${e.ip}` : ""}`;
     for (const l of wrapText(line, c.font, 8, W - 2 * M)) {
       ensure(11);
       text(l, M, 8);

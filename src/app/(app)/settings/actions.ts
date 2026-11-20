@@ -1,4 +1,5 @@
 "use server";
+import { validTimeZone } from "@/lib/time";
 
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -35,9 +36,10 @@ export async function saveRemindersAction(_: RemindersState, fd: FormData): Prom
   const expiry = Number(fd.get("linkExpiryDays") ?? 30);
   if (!Number.isInteger(expiry) || expiry < 1 || expiry > 365) return { error: "Links expire after 1 to 365 days." };
   if (finalDays >= expiry) return { error: "The final reminder must come before the links expire." };
+  const timezone = validTimeZone(String(fd.get("timezone") ?? ""));
   await db
     .update(schema.companies)
-    .set({ remindersEnabled: fd.get("remindersEnabled") === "on", reminderDays: days, finalReminderDays: finalDays, linkExpiryDays: expiry })
+    .set({ remindersEnabled: fd.get("remindersEnabled") === "on", reminderDays: days, finalReminderDays: finalDays, linkExpiryDays: expiry, ...(timezone ? { timezone } : {}) })
     .where(eq(schema.companies.id, auth.company.id));
   revalidatePath("/settings");
   return { ok: true };

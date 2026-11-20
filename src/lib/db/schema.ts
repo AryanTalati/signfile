@@ -75,6 +75,8 @@ export const companies = pgTable("companies", {
   reminderDays: jsonb("reminder_days").$type<number[]>().notNull().default([2, 5]),
   /** Days before expiry for the final reminder; 0 = none. */
   finalReminderDays: integer("final_reminder_days").notNull().default(2),
+  /** IANA time zone, shown next to UTC on certificates. Null = UTC only. */
+  timezone: text("timezone"),
   createdAt: createdAt(),
 });
 
