@@ -34,6 +34,7 @@ npm run test:e2e             # Playwright, desktop + phone; E2E_BASE_URL=https:/
 - [ ] Final commit pushed **before 12:40 PM MST** (19:40 UTC). No commits after.
 - [ ] **Make the GitHub repo public** (Settings → General → Danger Zone → Change visibility).
 - [ ] Live Render URL loads, `/api/health` returns ok, and the uptime pinger is running. If the site hangs while waking, use Render → Manual Deploy → **Restart service**.
+- [ ] Render → Environment has `ENABLE_SWEEP=1` (reminders and expiry run only there) and does **not** have `E2E_HOOKS`. Check: `curl -X POST https://signfile.onrender.com/api/test/automations` returns 404.
 - [ ] Full test path passes on the live URL with a fresh, unseen agreement (desktop + phone).
 - [ ] Demo login in this README works on the live URL.
 - [ ] Anthropic monthly spend limit set.

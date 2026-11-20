@@ -1,10 +1,10 @@
 import "server-only";
 import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
-import { recordEmail, sendingEnabled } from "@/lib/email/outbox";
+import { recordEmail } from "@/lib/email/outbox";
 import { expiredEmail } from "@/lib/email/templates";
 import { reminderEmailFor, SIGN_KINDS } from "./actions";
-import { dueReminder } from "./reminders";
+import { automationsEnabled, dueReminder } from "./reminders";
 
 /**
  * Time-based automations, run from the /api/health sweep (the uptime pinger hits it every few
@@ -18,8 +18,7 @@ import { dueReminder } from "./reminders";
 
 const OPEN = ["sent", "partially_signed"] as const;
 
-/** The sweep runs only where email is really sent: local/test environments share the database and must not use up reminder slots. */
-export const automationsEnabled = () => sendingEnabled() && process.env.E2E_HOOKS !== "1";
+export { automationsEnabled };
 
 let running: Promise<unknown> | null = null;
 let lastRun = 0;

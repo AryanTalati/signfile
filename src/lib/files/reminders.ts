@@ -56,3 +56,9 @@ export function parseReminderDays(raw: string): number[] | null {
   if (days.some((d) => !Number.isInteger(d) || d < 1 || d > 60)) return null;
   return [...new Set(days)].sort((a, b) => a - b);
 }
+
+/**
+ * The sweep runs only where ENABLE_SWEEP=1 is set explicitly (Render only). Local dev and the
+ * Docker test run share the production database and must never send reminders or expire Files.
+ */
+export const automationsEnabled = (env: NodeJS.ProcessEnv = process.env) => env.ENABLE_SWEEP === "1" && env.E2E_HOOKS !== "1";

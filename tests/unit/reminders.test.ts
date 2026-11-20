@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DAY_MS, DEFAULT_REMINDERS, dueReminder, parseReminderDays, reminderSlots } from "../../src/lib/files/reminders";
+import { automationsEnabled, DAY_MS, DEFAULT_REMINDERS, dueReminder, parseReminderDays, reminderSlots } from "../../src/lib/files/reminders";
 
 // Mocked clock: everything is relative to a fixed start time.
 const t0 = new Date("2026-11-02T15:00:00Z");
@@ -61,4 +61,12 @@ test("settings parser", () => {
   assert.equal(parseReminderDays("0"), null);
   assert.equal(parseReminderDays("1.5"), null);
   assert.equal(parseReminderDays("1,2,3,4,5,6"), null);
+});
+
+test("sweep runs only with an explicit ENABLE_SWEEP=1, never with E2E_HOOKS", () => {
+  const gmail = { GMAIL_CLIENT_ID: "a", GMAIL_CLIENT_SECRET: "b", GMAIL_REFRESH_TOKEN: "c", GMAIL_SENDER: "d@x.org" };
+  assert.equal(automationsEnabled({ ...gmail } as unknown as NodeJS.ProcessEnv), false); // Gmail alone isn't enough
+  assert.equal(automationsEnabled({ ENABLE_SWEEP: "true" } as unknown as NodeJS.ProcessEnv), false);
+  assert.equal(automationsEnabled({ ENABLE_SWEEP: "1" } as unknown as NodeJS.ProcessEnv), true);
+  assert.equal(automationsEnabled({ ENABLE_SWEEP: "1", E2E_HOOKS: "1" } as unknown as NodeJS.ProcessEnv), false);
 });
