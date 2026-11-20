@@ -22,6 +22,8 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
   "recipient.viewed": (e) => `Viewed by ${who(e)}`,
   "recipient.consented": (e) => `${who(e)} agreed to sign electronically`,
   "recipient.signed": (e) => `Signed by ${who(e)}`,
+  "recipient.details_changed": (e) =>
+    `${str(e.data?.field) || "Detail"} changed from ${str(e.data?.from) || "(blank)"} to ${str(e.data?.to) || "(blank)"} by ${who(e)}`,
   "recipient.signed_with_saved_signature": (e) => `${who(e)} used their saved signature`,
   "recipient.auto_countersigned": (e) => `Countersigned automatically with ${who(e)}'s saved signature${str(e.data?.authorizedAt) ? ` (authorized ${str(e.data?.authorizedAt).slice(0, 10)})` : ""}`,
   "recipient.auto_countersign_failed": (e) => `Automatic countersign didn't apply${str(e.data?.reason) ? ` (${str(e.data?.reason)})` : ""}; ${who(e)} was asked to countersign`,

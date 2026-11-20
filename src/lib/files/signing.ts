@@ -12,6 +12,7 @@ import { extractLayout } from "@/lib/pdf/extract";
 import { signLink } from "./service";
 import { appUrl } from "@/lib/http/app-url";
 import { formatSignedDate } from "@/lib/fields/format";
+import { detailChanges } from "@/lib/fields/signer-details";
 
 /**
  * Public signing, authorized only by the recipient's link token. Nothing here
@@ -220,6 +221,7 @@ export async function submitSigning(
     if (f.required && !raw) throw new SigningError(`Please complete "${f.label}".`);
     if (raw) values[f.id] = raw;
   }
+  const changes = detailChanges(view.mine, view.prefill, values);
 
   const tz = input.timezone && /^[A-Za-z_+\-/0-9]{1,64}$/.test(input.timezone) ? input.timezone : null;
   return db.transaction(async (tx) => {
@@ -245,6 +247,20 @@ export async function submitSigning(
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
+    // The signer edited a name/title we prefilled from the File: keep both in the audit trail.
+    for (const c of changes)
+      await tx.insert(schema.events).values({
+        companyId: ctx.file.companyId,
+        fileId: ctx.file.id,
+        recipientId: ctx.recipient.id,
+        actorType: "recipient",
+        actorId: ctx.recipient.id,
+        actorLabel: ctx.recipient.name,
+        type: "recipient.details_changed",
+        data: c,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+      });
 
     // Next signer in order, if any.
     const [next] = await tx

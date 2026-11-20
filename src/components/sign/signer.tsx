@@ -299,7 +299,14 @@ export function Signer(p: Props) {
             className="w-full max-w-md rounded-t-2xl bg-surface p-4 sm:rounded-2xl"
             onSubmit={(e) => {
               e.preventDefault();
-              setValues((v) => ({ ...v, [sheet.field.id]: sheet.value.trim() }));
+              const next = sheet.value.trim();
+              setValues((v) => {
+                const out = { ...v, [sheet.field.id]: next };
+                // Name/title appear in several places: change the other copies that still match.
+                if (sheet.field.type === "full_name" || sheet.field.type === "title")
+                  for (const f of mine) if (f.type === sheet.field.type && f.id !== sheet.field.id && (v[f.id] ?? "") === (v[sheet.field.id] ?? "")) out[f.id] = next;
+                return out;
+              });
               setSheet(null);
             }}
           >
