@@ -1,5 +1,5 @@
 import { requestMeta } from "@/lib/auth/session";
-import { loadSigning, SigningError, submitSchema, submitSigning } from "@/lib/files/signing";
+import { autoCountersign, loadSigning, SigningError, submitSchema, submitSigning } from "@/lib/files/signing";
 import { appUrl } from "@/lib/http/app-url";
 import { sealFile } from "@/lib/files/seal";
 import { fail, json } from "@/lib/http/respond";
@@ -16,6 +16,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   try {
     const base = await appUrl();
     const out = await submitSigning(ctx, parsed.data, await requestMeta(), base);
+    // The firm countersigner turned on automatic countersigning: apply it now (in this request).
+    if (out.autoCountersign && (await autoCountersign(out.autoCountersign, base))?.completed) out.completed = true;
     // Last signature: seal now, in this request. A failure here never loses the signature;
     // the File page offers a retry and downloads seal on demand.
     if (out.completed) await sealFile(ctx.file.id, base).catch((e) => console.error("sealing failed", ctx.file.id, e));

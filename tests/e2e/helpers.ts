@@ -107,7 +107,7 @@ export async function saveMySignature(page: Page, title = "Managing Partner") {
   await page.getByRole("button", { name: "Set up my signature" }).click();
   await page.getByRole("button", { name: "Adopt and sign" }).click();
   await page.getByRole("button", { name: "Adopt and sign" }).click();
-  await page.getByRole("checkbox").check();
+  await page.getByTestId("signature-settings").getByRole("checkbox").check();
   await page.getByRole("button", { name: "Save my signature" }).click();
   await expect(page.getByAltText("Your saved signature")).toBeVisible();
 }

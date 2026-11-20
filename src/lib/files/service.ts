@@ -46,7 +46,13 @@ export class FileInputError extends Error {
 /** Team members who can countersign (any user of the company). */
 export async function listCountersigners(auth: AuthContext) {
   return db
-    .select({ id: schema.users.id, name: schema.users.name, title: schema.users.title, email: schema.users.email })
+    .select({
+      id: schema.users.id,
+      name: schema.users.name,
+      title: schema.users.title,
+      email: schema.users.email,
+      autoCountersign: sql<boolean>`(${schema.users.autoCountersignAt} is not null and ${schema.users.savedSignature} is not null)`,
+    })
     .from(schema.users)
     .where(eq(schema.users.companyId, auth.company.id))
     .orderBy(asc(schema.users.name));

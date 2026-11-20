@@ -13,7 +13,7 @@ test("saved signature: one-click countersign from the dashboard; logged-out link
   await page.getByRole("button", { name: "Set up my signature" }).click();
   await page.getByRole("button", { name: "Adopt and sign" }).click(); // signature (typed)
   await page.getByRole("button", { name: "Adopt and sign" }).click(); // initials (typed)
-  await page.getByRole("checkbox").check();
+  await page.getByTestId("signature-settings").getByRole("checkbox").check();
   await page.getByRole("button", { name: "Save my signature" }).click();
   await expect(page.getByAltText("Your saved signature")).toBeVisible();
 

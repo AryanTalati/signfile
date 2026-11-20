@@ -264,6 +264,19 @@ export async function submitSigning(
         type: "recipient.activated",
         data: { name: next.name, email: next.email, role: next.roleKey },
       });
+      // Automatic countersign: the firm signer is the last one left and has turned it on for
+      // themselves. No "please countersign" email; the caller applies their saved signature next.
+      if (next.userId) {
+        const [[u], [after]] = await Promise.all([
+          tx.select({ autoAt: schema.users.autoCountersignAt, sig: schema.users.savedSignature }).from(schema.users).where(and(eq(schema.users.id, next.userId), eq(schema.users.companyId, ctx.file.companyId))),
+          tx
+            .select({ id: schema.recipients.id })
+            .from(schema.recipients)
+            .where(and(eq(schema.recipients.documentId, ctx.recipient.documentId), eq(schema.recipients.status, "waiting"), sql`${schema.recipients.id} <> ${next.id}`))
+            .limit(1),
+        ]);
+        if (u?.autoAt && u.sig && !after) return { completed: false, nextName: next.name, autoCountersign: next.token };
+      }
       const [t] = ctx.file.templateId ? await tx.select({ name: schema.templates.name }).from(schema.templates).where(eq(schema.templates.id, ctx.file.templateId)) : [];
       const brand = { name: ctx.company.name, color: ctx.company.brandColor };
       const docName = t?.name ?? "the agreement";
@@ -282,12 +295,12 @@ export async function submitSigning(
             countersign: false,
           });
       await recordEmail(tx, { companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: next.id, kind: isFirm ? "countersign_request" : "sign_request", toEmail: next.email, toName: next.name, ...email });
-      return { completed: false, nextName: next.name };
+      return { completed: false, nextName: next.name, autoCountersign: null as string | null };
     }
 
     await tx.update(schema.files).set({ status: "completed", completedAt: now, updatedAt: now }).where(eq(schema.files.id, ctx.file.id));
     await tx.insert(schema.events).values({ companyId: ctx.file.companyId, fileId: ctx.file.id, actorType: "system", type: "file.completed", data: {} });
-    return { completed: true, nextName: null };
+    return { completed: true, nextName: null, autoCountersign: null as string | null };
   });
 }
 
@@ -308,6 +321,7 @@ export async function quickSign(
   meta: { ip: string | null; userAgent: string | null },
   baseUrl: string,
   timezone?: string,
+  auto?: { authorizedAt: Date },
 ) {
   if (ctx.state !== "sign") throw new SigningError("This link can't be signed right now.");
   if (!ctx.recipient.userId || ctx.recipient.userId !== user.id) throw new SigningError("Only the countersigner named on this File can use their saved signature.");
@@ -332,10 +346,47 @@ export async function quickSign(
     actorType: "user",
     actorId: user.id,
     actorLabel: ctx.recipient.name,
-    type: "recipient.signed_with_saved_signature",
-    data: {},
+    type: auto ? "recipient.auto_countersigned" : "recipient.signed_with_saved_signature",
+    data: auto ? { authorizedAt: auto.authorizedAt.toISOString(), signedAt: new Date().toISOString() } : {},
     ip: meta.ip,
     userAgent: meta.userAgent,
   });
   return out;
+}
+
+/**
+ * Applies the firm countersigner's saved signature automatically, after the last other signer
+ * (submitSigning returned their token in `autoCountersign`). Only for a user who turned this on
+ * for themselves. Recorded as their own signing: consent, values, an "automatic countersign"
+ * event, and the IP/user agent from which they authorized it. If it can't apply (setting turned
+ * off meanwhile, a field that needs typing), they get the normal "please countersign" email.
+ */
+export async function autoCountersign(token: string, baseUrl: string) {
+  const ctx = await loadSigning(token);
+  if (!ctx || ctx.state !== "sign" || !ctx.recipient.userId) return null;
+  const [u] = await db
+    .select({ id: schema.users.id, title: schema.users.title, sig: schema.users.savedSignature, ini: schema.users.savedInitials, autoAt: schema.users.autoCountersignAt, ip: schema.users.autoCountersignIp, ua: schema.users.autoCountersignUa })
+    .from(schema.users)
+    .where(and(eq(schema.users.id, ctx.recipient.userId), eq(schema.users.companyId, ctx.file.companyId)));
+  try {
+    if (!u?.sig || !u.autoAt) throw new SigningError("turned off");
+    const meta = { ip: u.ip, userAgent: `Automatic countersign authorized ${u.autoAt.toISOString()}${u.ua ? ` from ${u.ua}` : ""}`.slice(0, 500) };
+    return await quickSign(ctx, { id: u.id, title: u.title }, { signature: u.sig, initials: u.ini ?? u.sig }, meta, baseUrl, undefined, { authorizedAt: u.autoAt });
+  } catch (e) {
+    const reason = e instanceof SigningError ? e.message : "unexpected error";
+    if (!(e instanceof SigningError)) console.error("auto countersign failed", ctx.file.id, e);
+    await db.transaction(async (tx) => {
+      const [t] = ctx.file.templateId ? await tx.select({ name: schema.templates.name }).from(schema.templates).where(eq(schema.templates.id, ctx.file.templateId)) : [];
+      const [last] = await tx
+        .select({ name: schema.recipients.name })
+        .from(schema.recipients)
+        .where(and(eq(schema.recipients.documentId, ctx.recipient.documentId), eq(schema.recipients.status, "signed")))
+        .orderBy(sql`${schema.recipients.signedAt} desc`)
+        .limit(1);
+      const email = countersignRequestEmail({ brand: { name: ctx.company.name, color: ctx.company.brandColor }, recipientName: ctx.recipient.name, documentName: t?.name ?? "the agreement", signerName: last?.name ?? ctx.file.clientLegalName, signerCompany: ctx.file.clientLegalName, link: signLink(baseUrl, token) });
+      await recordEmail(tx, { companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: ctx.recipient.id, kind: "countersign_request", toEmail: ctx.recipient.email, toName: ctx.recipient.name, ...email });
+      await tx.insert(schema.events).values({ companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: ctx.recipient.id, actorType: "system", actorLabel: ctx.recipient.name, type: "recipient.auto_countersign_failed", data: { reason } });
+    });
+    return null;
+  }
 }

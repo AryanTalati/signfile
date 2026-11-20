@@ -92,6 +92,10 @@ export const users = pgTable(
     savedSignature: text("saved_signature"),
     savedInitials: text("saved_initials"),
     savedSignatureAt: ts("saved_signature_at"),
+    /** Standing instruction to countersign automatically with the saved signature once all other signers have signed. Null = off. */
+    autoCountersignAt: ts("auto_countersign_at"),
+    autoCountersignIp: text("auto_countersign_ip"),
+    autoCountersignUa: text("auto_countersign_ua"),
     createdAt: createdAt(),
     lastLoginAt: ts("last_login_at"),
   },

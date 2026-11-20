@@ -14,7 +14,7 @@ export function NewFileForm(props: {
   countersign: boolean;
   firmFirst: boolean;
   mySavedSignature: string | null;
-  team: { id: string; name: string; title: string | null; email: string }[];
+  team: { id: string; name: string; title: string | null; email: string; autoCountersign: boolean }[];
   defaultCountersignerId: string;
 }) {
   const router = useRouter();
@@ -102,7 +102,11 @@ export function NewFileForm(props: {
               </option>
             ))}
           </select>
-          {!props.firmFirst && <p className="text-sm text-muted">They get their link after the client signs.</p>}
+          {!props.firmFirst && (props.team.find((u) => u.id === signer)?.autoCountersign ? (
+            <p className="text-sm text-muted" data-testid="auto-countersign-note">Countersigns automatically with their saved signature as soon as the client signs; the File then seals.</p>
+          ) : (
+            <p className="text-sm text-muted">They get their link after the client signs.</p>
+          ))}
           {props.firmFirst && signerIsMe && props.mySavedSignature && (
             <label className="mt-2 flex items-start gap-3 rounded-lg border border-border p-3 text-sm" data-testid="sign-now">
               <input type="checkbox" name="signNow" defaultChecked className="mt-1" />

@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Caveat } from "next/font/google";
 import { Card } from "@/components/ui";
 import { requireAuth } from "@/lib/auth/session";
-import { ADOPT_TEXT, getSavedSignature } from "@/lib/users/signature";
+import { ADOPT_TEXT, AUTO_COUNTERSIGN_TEXT, getSavedSignature } from "@/lib/users/signature";
+import { AutoCountersign } from "./auto-countersign";
 import { DetailsForm } from "./details-form";
 import { SignatureSettings } from "./signature-settings";
 import { RemindersForm } from "./reminders-form";
@@ -35,6 +36,7 @@ export default async function SettingsPage() {
         <h2 className="font-semibold">Your signature</h2>
         <p className="mt-1 text-sm text-muted">Save it once, then countersign a client&apos;s agreement with one click. You still choose to sign each time.</p>
         <SignatureSettings name={auth.user.name} saved={saved ? { signature: saved.signature, initials: saved.initials } : null} adoptText={ADOPT_TEXT} />
+        {saved && <AutoCountersign on={!!saved.autoCountersignAt} since={saved.autoCountersignAt?.toISOString() ?? null} consentText={AUTO_COUNTERSIGN_TEXT} />}
       </Card>
       {auth.user.role === "admin" && company && (
         <Card className="p-5">

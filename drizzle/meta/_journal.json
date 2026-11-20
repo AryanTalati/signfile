@@ -64,6 +64,13 @@
       "when": 1795200000000,
       "tag": "0008_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795210000000,
+      "tag": "0009_auto_countersign",
+      "breakpoints": true
     }
   ]
 }

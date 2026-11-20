@@ -23,6 +23,8 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
   "recipient.consented": (e) => `${who(e)} agreed to sign electronically`,
   "recipient.signed": (e) => `Signed by ${who(e)}`,
   "recipient.signed_with_saved_signature": (e) => `${who(e)} used their saved signature`,
+  "recipient.auto_countersigned": (e) => `Countersigned automatically with ${who(e)}'s saved signature${str(e.data?.authorizedAt) ? ` (authorized ${str(e.data?.authorizedAt).slice(0, 10)})` : ""}`,
+  "recipient.auto_countersign_failed": (e) => `Automatic countersign didn't apply${str(e.data?.reason) ? ` (${str(e.data?.reason)})` : ""}; ${who(e)} was asked to countersign`,
   "recipient.activated": (e) => (str(e.data?.name) ? `${str(e.data?.name)}'s turn to sign` : "Next signer's turn"),
   "recipient.declined": (e) => `Declined by ${who(e)}${str(e.data?.reason) ? `: ${str(e.data?.reason)}` : ""}`,
   "recipient.requested_changes": (e) => `${who(e)} requested changes${str(e.data?.message) ? `: ${str(e.data?.message)}` : ""}`,
@@ -40,6 +42,8 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
   "template.signature_page_removed": (e) => `Signature page removed by ${who(e)}`,
   "user.signature_adopted": (e) => `${who(e)} saved their signature`,
   "user.signature_removed": (e) => `${who(e)} removed their saved signature`,
+  "user.auto_countersign_enabled": (e) => `${who(e)} turned on automatic countersigning`,
+  "user.auto_countersign_disabled": (e) => `${who(e)} turned off automatic countersigning`,
 };
 
 export function eventLabel(e: EventLike): string {
