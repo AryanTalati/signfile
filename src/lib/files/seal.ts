@@ -6,6 +6,7 @@ import { recordEmail } from "@/lib/email/outbox";
 import { sha256 } from "@/lib/pdf/prepare";
 import { deleteObjects, getObject, putObject } from "@/lib/storage";
 import { formatSignedDate } from "@/lib/fields/format";
+import { signedTitle } from "@/lib/fields/signer-details";
 import { stampAll } from "@/lib/pdf/stamp";
 import { eventLabel } from "./event-labels";
 
@@ -80,7 +81,7 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
       signers: signers.map((s) => ({
         name: s.name,
         email: s.email,
-        title: s.title,
+        title: signedTitle(doc.fields, s.roleKey, s.values ?? {}),
         role: s.roleKey === "firm" ? `Signed for ${company?.name ?? "the firm"}` : `Signed for ${file.clientLegalName}`,
         ip: s.ip,
         userAgent: s.userAgent,

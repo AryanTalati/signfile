@@ -12,7 +12,7 @@ import { extractLayout } from "@/lib/pdf/extract";
 import { signLink } from "./service";
 import { appUrl } from "@/lib/http/app-url";
 import { formatSignedDate } from "@/lib/fields/format";
-import { detailChanges } from "@/lib/fields/signer-details";
+import { detailChanges, signedTitle } from "@/lib/fields/signer-details";
 
 /**
  * Public signing, authorized only by the recipient's link token. Nothing here
@@ -243,7 +243,7 @@ export async function submitSigning(
       actorId: ctx.recipient.id,
       actorLabel: ctx.recipient.name,
       type: "recipient.signed",
-      data: { role: ctx.recipient.roleKey, email: ctx.recipient.email, title: ctx.recipient.title, fields: Object.keys(values).length, timezone: tz, documentSha256: view.documentSha },
+      data: { role: ctx.recipient.roleKey, email: ctx.recipient.email, title: signedTitle(view.mine, ctx.recipient.roleKey, values), fields: Object.keys(values).length, timezone: tz, documentSha256: view.documentSha },
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
