@@ -31,6 +31,8 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
   "file.completed": () => "All parties signed",
   "file.sealed": () => "Signed PDF sealed with its certificate",
   "file.expired": () => "Signing links expired",
+  "file.extended": (e) => `Links extended and resent by ${who(e)}`,
+  "file.reminded": (e) => `Reminder sent to ${str(e.data?.to) || "the signer"}`,
   "file.voided": (e) => `Voided by ${who(e)}${str(e.data?.reason) ? `: ${str(e.data?.reason)}` : ""}`,
   "file.resent": (e) => `Signing email resent to ${str(e.data?.to) || "the signer"} by ${who(e)}`,
   "template.created": (e) => `Template created by ${who(e)}`,

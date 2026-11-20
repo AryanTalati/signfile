@@ -110,6 +110,7 @@ export async function reviseAndResend(
           email: prior!.email,
           token,
           status: active ? "active" : "waiting",
+          activatedAt: active ? now : null,
         })
         .returning({ id: schema.recipients.id });
       created.push({ id: r.id, token, name: prior!.name, email: prior!.email, userId: prior!.userId, active, signAgain: prior!.status === "signed" });

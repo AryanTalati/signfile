@@ -11,6 +11,8 @@ const KIND_LABEL: Record<string, string> = {
   signed_copy: "Signed copy",
   resend: "Signing request (resent)",
   voided: "Agreement voided",
+  reminder: "Reminder",
+  expired: "Links expired",
 };
 export const kindLabel = (k: string) => KIND_LABEL[k] ?? k;
 

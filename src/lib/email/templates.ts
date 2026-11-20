@@ -127,3 +127,18 @@ ${o.note ? `<p><strong>What changed:</strong> ${esc(o.note).replace(/\n/g, "<br>
   const text = `A revised version (version ${o.version}) of "${o.documentName}" for ${o.clientLegalName} has been sent. ${o.signAgain ? "Your earlier signature doesn't carry over. " : ""}You'll get a new link when it's your turn.`;
   return { subject, html, text };
 }
+
+/** To the firm: a File's signing links expired before everyone signed. */
+export function expiredEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string; waitingOn: string | null; fileUrl: string }) {
+  const subject = `Expired: "${o.documentName}" for ${o.clientLegalName}`;
+  const waiting = o.waitingOn ? ` It was waiting on ${esc(o.waitingOn)}.` : "";
+  const html = layout(
+    o.brand,
+    `<p>Hi ${esc(o.recipientName.split(" ")[0])},</p>
+<p>The signing links for <strong>${esc(o.documentName)}</strong> for ${esc(o.clientLegalName)} expired before everyone signed.${waiting}</p>
+<p>Open the File to extend it and resend the link, or void it.</p>
+${button(o.brand, o.fileUrl, "Open the File")}`,
+  );
+  const text = `The signing links for "${o.documentName}" for ${o.clientLegalName} expired before everyone signed.${o.waitingOn ? ` It was waiting on ${o.waitingOn}.` : ""}\n\nOpen the File to extend it and resend the link, or void it: ${o.fileUrl}`;
+  return { subject, html, text };
+}

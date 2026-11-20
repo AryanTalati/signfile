@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db/client";
 import { countersignRequestEmail, signRequestEmail } from "@/lib/email/templates";
@@ -10,6 +10,7 @@ import { getObject } from "@/lib/storage";
 import { fitToPage } from "@/lib/pdf/detect";
 import { extractLayout } from "@/lib/pdf/extract";
 import { signLink } from "./service";
+import { appUrl } from "@/lib/http/app-url";
 import { formatSignedDate } from "@/lib/fields/format";
 
 /**
@@ -44,16 +45,10 @@ export async function loadSigning(token: string) {
   const { recipient: r, file } = row;
   let fileStatus = file.status;
 
-  // Lazily expire: past expiry and still out for signature.
+  // Expire on open too, in case the sweep hasn't run yet (same path: event + email to the firm).
   if ((fileStatus === "sent" || fileStatus === "partially_signed") && file.expiresAt && file.expiresAt < new Date()) {
-    await db.transaction(async (tx) => {
-      const n = await tx
-        .update(schema.files)
-        .set({ status: "expired", updatedAt: new Date() })
-        .where(and(eq(schema.files.id, file.id), inArray(schema.files.status, ["sent", "partially_signed"])))
-        .returning({ id: schema.files.id });
-      if (n.length) await tx.insert(schema.events).values({ companyId: file.companyId, fileId: file.id, actorType: "system", type: "file.expired", data: { expiresAt: file.expiresAt?.toISOString() } });
-    });
+    const { expireFile } = await import("./automations");
+    await expireFile(file.id, new Date(), await appUrl().catch(() => process.env.APP_URL ?? ""));
     fileStatus = "expired";
   }
 
@@ -259,7 +254,7 @@ export async function submitSigning(
       .orderBy(asc(schema.recipients.signingOrder))
       .limit(1);
     if (next) {
-      await tx.update(schema.recipients).set({ status: "active" }).where(eq(schema.recipients.id, next.id));
+      await tx.update(schema.recipients).set({ status: "active", activatedAt: now }).where(eq(schema.recipients.id, next.id));
       await tx.update(schema.files).set({ status: "partially_signed", updatedAt: now }).where(eq(schema.files.id, ctx.file.id));
       await tx.insert(schema.events).values({
         companyId: ctx.file.companyId,

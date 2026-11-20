@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { resendAction, voidAction, type ActionState } from "@/app/(app)/files/[id]/actions";
 import { Card } from "@/components/ui";
 
-export function FileActions({ fileId, canResend, canVoid, waitingOn }: { fileId: string; canResend: boolean; canVoid: boolean; waitingOn: string | null }) {
+export function FileActions({ fileId, canResend, canVoid, waitingOn, expired = false }: { fileId: string; canResend: boolean; canVoid: boolean; waitingOn: string | null; expired?: boolean }) {
   const [resend, resendFormAction, resending] = useActionState<ActionState, FormData>(resendAction, {});
   const [voided, voidFormAction, voiding] = useActionState<ActionState, FormData>(voidAction, {});
   const [showVoid, setShowVoid] = useState(false);
@@ -17,7 +17,7 @@ export function FileActions({ fileId, canResend, canVoid, waitingOn }: { fileId:
           <form action={resendFormAction}>
             <input type="hidden" name="fileId" value={fileId} />
             <button disabled={resending} className="rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-60">
-              {resending ? "Resending…" : `Resend to ${waitingOn ?? "signer"}`}
+              {resending ? "Resending…" : expired ? `Extend and resend to ${waitingOn ?? "signer"}` : `Resend to ${waitingOn ?? "signer"}`}
             </button>
           </form>
         )}

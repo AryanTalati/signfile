@@ -148,6 +148,7 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
         email: input.signerEmail,
         token: clientToken,
         status: firmFirst ? "waiting" : "active",
+        activatedAt: firmFirst ? null : now,
       })
       .returning({ id: schema.recipients.id });
     let firmRecipientId: string | null = null;
@@ -166,6 +167,7 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
           email: countersigner.email,
           token: firmToken,
           status: firmFirst ? "active" : "waiting",
+          activatedAt: firmFirst ? now : null,
         })
         .returning({ id: schema.recipients.id });
       firmRecipientId = firm.id;

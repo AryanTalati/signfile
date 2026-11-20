@@ -5,6 +5,8 @@ import { pingDatabase } from "@/lib/db/ping";
 import { convertToPdf, ConversionError } from "@/lib/pdf/convert";
 import { storageSelfTest } from "@/lib/storage";
 import { sweepOutbox } from "@/lib/email/outbox";
+import { sweepAutomations } from "@/lib/files/automations";
+import { appUrl } from "@/lib/http/app-url";
 import { mb, memoryReport } from "@/lib/system/memory";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +25,8 @@ export async function GET(req: Request) {
   const [db, memory] = await Promise.all([pingDatabase(), memoryReport()]);
   // Piggyback: retry any emails left queued (the uptime pinger hits this every 5 min). Never awaited.
   if (db.ok) void sweepOutbox().catch(() => undefined);
+  // Same ping drives reminders and expiry (never awaited; idempotent; at most once a minute).
+  if (db.ok) sweepAutomations(await appUrl());
 
   const body: Record<string, unknown> = {
     ok: db.ok || !db.configured,

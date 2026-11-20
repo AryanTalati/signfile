@@ -70,6 +70,11 @@ export const companies = pgTable("companies", {
   defaultCountersignerId: uuid("default_countersigner_id").references((): AnyPgColumn => users.id, { onDelete: "set null" }),
   /** Days until a sent File's links expire. */
   linkExpiryDays: integer("link_expiry_days").notNull().default(30),
+  /** Automatic reminders to whoever's turn it is: N days after their turn starts, and a final one before expiry. */
+  remindersEnabled: boolean("reminders_enabled").notNull().default(true),
+  reminderDays: jsonb("reminder_days").$type<number[]>().notNull().default([2, 5]),
+  /** Days before expiry for the final reminder; 0 = none. */
+  finalReminderDays: integer("final_reminder_days").notNull().default(2),
   createdAt: createdAt(),
 });
 
@@ -269,6 +274,8 @@ export const recipients = pgTable(
     userAgent: text("user_agent"),
     /** Signer's IANA time zone from the browser, for local time on the certificate. */
     timezone: text("timezone"),
+    /** When it became this signer's turn; reminders count from here. */
+    activatedAt: ts("activated_at"),
     forwardedFromId: uuid("forwarded_from_id").references((): AnyPgColumn => recipients.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
@@ -319,10 +326,16 @@ export const outbox = pgTable(
     status: outboxStatus("status").notNull().default("queued"),
     attempts: integer("attempts").notNull().default(0),
     error: text("error"),
+    /** Automatic reminders only: the schedule slot ("after:2", "before_expiry:2"). Unique per signer. */
+    reminderSlot: text("reminder_slot"),
     createdAt: createdAt(),
     sentAt: ts("sent_at"),
   },
-  (t) => [index("outbox_company_idx").on(t.companyId, t.createdAt), index("outbox_file_idx").on(t.fileId)],
+  (t) => [
+    index("outbox_company_idx").on(t.companyId, t.createdAt),
+    index("outbox_file_idx").on(t.fileId),
+    uniqueIndex("outbox_reminder_slot_uq").on(t.recipientId, t.reminderSlot).where(sql`${t.reminderSlot} is not null`),
+  ],
 );
 
 /**

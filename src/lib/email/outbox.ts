@@ -28,21 +28,22 @@ export async function recordEmail(
     html: string;
     text: string;
     attachments?: { filename: string; storageKey: string }[];
+    /** Automatic reminders: the schedule slot. A slot already recorded for this signer is skipped (returns null). */
+    reminderSlot?: string;
   },
-) {
+): Promise<string | null> {
   const configured = !!gmailConfig();
   const test = isTestAddress(e.toEmail);
   const status = configured && !test ? "queued" : "captured";
-  const [row] = await tx
-    .insert(schema.outbox)
-    .values({
-      ...e,
-      attachments: e.attachments ?? [],
-      status,
-      provider: status === "queued" ? "gmail" : null,
-      error: !configured ? "Sending is off in this environment." : test ? "Test address: not sent." : null,
-    })
-    .returning({ id: schema.outbox.id });
+  const insert = tx.insert(schema.outbox).values({
+    ...e,
+    attachments: e.attachments ?? [],
+    status,
+    provider: status === "queued" ? "gmail" : null,
+    error: !configured ? "Sending is off in this environment." : test ? "Test address: not sent." : null,
+  });
+  const [row] = await (e.reminderSlot ? insert.onConflictDoNothing() : insert).returning({ id: schema.outbox.id });
+  if (!row) return null;
   if (status === "queued") scheduleDelivery(row.id);
   return row.id;
 }

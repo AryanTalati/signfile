@@ -103,7 +103,8 @@ export default async function FilePage({ params, searchParams }: { params: Promi
       )}
       <FileActions
         fileId={file.id}
-        canResend={file.status === "sent" || file.status === "partially_signed"}
+        canResend={file.status === "sent" || file.status === "partially_signed" || (file.status === "expired" && live.length > 0)}
+        expired={file.status === "expired"}
         canVoid={["draft", "sent", "partially_signed", "changes_requested", "expired"].includes(file.status)}
         waitingOn={live.map((r) => r.name).join(" and ") || null}
       />
