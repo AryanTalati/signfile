@@ -20,18 +20,19 @@ function layout(brand: Brand, body: string) {
 const button = (brand: Brand, href: string, label: string) =>
   `<p style="margin:24px 0"><a href="${esc(href)}" style="display:inline-block;background:${esc(brand.color)};color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">${esc(label)}</a></p>`;
 
-export function signRequestEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string; link: string; expiresAt: Date; senderName: string; countersign: boolean }) {
-  const subject = `${o.brand.name}: please sign "${o.documentName}"`;
+export function signRequestEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string; link: string; expiresAt: Date; senderName: string; countersign: boolean; revised?: { version: number; signAgain: boolean } }) {
+  const subject = o.revised ? `${o.brand.name}: revised "${o.documentName}" (version ${o.revised.version}) to sign` : `${o.brand.name}: please sign "${o.documentName}"`;
   // Date only, labelled UTC (the email can't know the reader's time zone).
   const exp = `${o.expiresAt.toLocaleDateString("en-US", { dateStyle: "long", timeZone: "UTC" })} (UTC)`;
   const html = layout(
     o.brand,
     `<p>Hi ${esc(o.recipientName.split(" ")[0])},</p>
-<p>${esc(o.senderName)} at ${esc(o.brand.name)} sent you <strong>${esc(o.documentName)}</strong> to sign for ${esc(o.clientLegalName)}.</p>
+<p>${esc(o.senderName)} at ${esc(o.brand.name)} sent you ${o.revised ? `a <strong>revised version (version ${o.revised.version})</strong> of ` : ""}<strong>${esc(o.documentName)}</strong> to sign for ${esc(o.clientLegalName)}.</p>
+${o.revised?.signAgain ? `<p><strong>You signed the earlier version. That signature doesn't carry over: please review and sign this version again.</strong> Your earlier link no longer works.</p>` : o.revised ? "<p>Earlier links no longer work; use the button below.</p>" : ""}
 ${button(o.brand, o.link, "Review and sign")}
 <p style="font-size:13px;color:#6b6b66">If you're not the right person to sign, open the link and use <em>Forward to someone else</em>. You can also request changes from the same page. This link expires on ${exp}.</p>`,
   );
-  const text = `Hi ${o.recipientName.split(" ")[0]},\n\n${o.senderName} at ${o.brand.name} sent you "${o.documentName}" to sign for ${o.clientLegalName}.\n\nReview and sign: ${o.link}\n\nNot the right person? Open the link and choose "Forward to someone else". This link expires on ${exp}.`;
+  const text = `Hi ${o.recipientName.split(" ")[0]},\n\n${o.senderName} at ${o.brand.name} sent you ${o.revised ? `a revised version (version ${o.revised.version}) of ` : ""}"${o.documentName}" to sign for ${o.clientLegalName}.${o.revised?.signAgain ? " You signed the earlier version; please sign this version again." : ""}\n\nReview and sign: ${o.link}\n\nNot the right person? Open the link and choose "Forward to someone else". This link expires on ${exp}.`;
   return { subject, html, text };
 }
 
@@ -85,5 +86,42 @@ export function voidedEmail(o: { brand: Brand; recipientName: string; documentNa
 <p style="font-size:13px;color:#6b6b66">If you have questions, reply to ${esc(o.brand.name)} directly.</p>`,
   );
   const text = `${o.brand.name} has voided "${o.documentName}" for ${o.clientLegalName}. It can no longer be signed.`;
+  return { subject, html, text };
+}
+
+export function declinedEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string; declinedBy: string; reason: string }) {
+  const subject = `Declined: "${o.documentName}" (${o.clientLegalName})`;
+  const html = layout(
+    o.brand,
+    `<p>Hi ${esc(o.recipientName.split(" ")[0])},</p>
+<p><strong>${esc(o.declinedBy)}</strong> declined to sign <strong>${esc(o.documentName)}</strong> for ${esc(o.clientLegalName)}. Signing has stopped and the signing links no longer work.</p>
+<p><strong>Reason:</strong> ${esc(o.reason)}</p>`,
+  );
+  const text = `${o.declinedBy} declined to sign "${o.documentName}" for ${o.clientLegalName}. Signing has stopped.\n\nReason: ${o.reason}`;
+  return { subject, html, text };
+}
+
+export function changesRequestedEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string; requestedBy: string; message: string; fileUrl: string }) {
+  const subject = `Changes requested: "${o.documentName}" (${o.clientLegalName})`;
+  const html = layout(
+    o.brand,
+    `<p>Hi ${esc(o.recipientName.split(" ")[0])},</p>
+<p><strong>${esc(o.requestedBy)}</strong> requested changes to <strong>${esc(o.documentName)}</strong> for ${esc(o.clientLegalName)}. Signing is paused until you send a revised version.</p>
+<p><strong>Their message:</strong><br>${esc(o.message).replace(/\n/g, "<br>")}</p>
+${button(o.brand, o.fileUrl, "Open the File")}`,
+  );
+  const text = `${o.requestedBy} requested changes to "${o.documentName}" for ${o.clientLegalName}. Signing is paused.\n\nMessage: ${o.message}\n\nOpen the File: ${o.fileUrl}`;
+  return { subject, html, text };
+}
+
+export function revisionNoticeEmail(o: { brand: Brand; recipientName: string; documentName: string; clientLegalName: string; version: number; signAgain: boolean }) {
+  const subject = `Revised: "${o.documentName}" (${o.clientLegalName}), version ${o.version}`;
+  const html = layout(
+    o.brand,
+    `<p>Hi ${esc(o.recipientName.split(" ")[0])},</p>
+<p>A revised version (version ${o.version}) of <strong>${esc(o.documentName)}</strong> for ${esc(o.clientLegalName)} has been sent for signature. Earlier links no longer work.</p>
+<p>${o.signAgain ? "You signed the earlier version; that signature doesn't carry over. " : ""}You'll get a new link when it's your turn to sign.</p>`,
+  );
+  const text = `A revised version (version ${o.version}) of "${o.documentName}" for ${o.clientLegalName} has been sent. ${o.signAgain ? "Your earlier signature doesn't carry over. " : ""}You'll get a new link when it's your turn.`;
   return { subject, html, text };
 }

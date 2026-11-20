@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { PdfPages, type DisplayPage } from "@/components/editor/pdf-pages";
 import type { FieldDef } from "@/lib/fields/types";
+import { RespondActions } from "./respond-actions";
 import { SignaturePad } from "./signature-pad";
 
 interface Props {
@@ -34,6 +35,7 @@ export function Signer(p: Props) {
   const [pad, setPad] = useState<{ field: FieldDef } | null>(null);
   const [sheet, setSheet] = useState<{ field: FieldDef; value: string } | null>(null);
   const [done, setDone] = useState<{ completed: boolean; nextName: string | null } | null>(null);
+  const [responded, setResponded] = useState<"declined" | "changes_requested" | null>(null);
   const pageEls = useRef(new Map<number, HTMLDivElement>());
   // Preview of the date this signer will get, in their local format. Display only: it is never
   // put in `values`, so it can't be submitted or stamped (the server sets the real date).
@@ -113,6 +115,21 @@ export function Signer(p: Props) {
     </header>
   );
 
+  if (responded)
+    return (
+      <main className="min-h-dvh" style={{ ["--brand" as string]: p.brand.color }}>
+        {header}
+        <div className="mx-auto mt-16 max-w-md px-4 text-center" data-testid={`sign-responded-${responded}`}>
+          <h1 className="text-2xl font-semibold">{responded === "declined" ? "You declined this agreement" : "Your request was sent"}</h1>
+          <p className="mt-3 text-muted">
+            {responded === "declined"
+              ? `Signing has stopped. ${p.brand.name} and everyone on this agreement have been emailed your reason.`
+              : `${p.brand.name} has your message. Signing is paused; you'll get a new link if they send a revised version.`}
+          </p>
+        </div>
+      </main>
+    );
+
   if (done)
     return (
       <main className="min-h-dvh" style={{ ["--brand" as string]: p.brand.color }}>
@@ -172,6 +189,9 @@ export function Signer(p: Props) {
             >
               {busy ? "One moment…" : p.quick?.savedSignature ? "Review and sign the usual way" : "I agree, review the agreement"}
             </button>
+            <div className="mt-4">
+              <RespondActions token={p.token} firmName={p.brand.name} onDone={setResponded} />
+            </div>
           </div>
         </div>
       </main>
@@ -233,6 +253,10 @@ export function Signer(p: Props) {
             </div>
           )}
         />
+      </div>
+
+      <div className="mx-auto max-w-[900px] px-4 pb-4">
+        <RespondActions token={p.token} firmName={p.brand.name} onDone={setResponded} />
       </div>
 
       {/* guided bar */}

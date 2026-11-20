@@ -62,7 +62,11 @@ export async function loadSigning(token: string) {
       ? "voided"
       : fileStatus === "expired"
         ? "expired"
-        : r.status === "revoked" || r.status === "forwarded" || r.documentId !== file.currentDocumentId
+        : fileStatus === "declined"
+          ? "declined"
+          : fileStatus === "changes_requested"
+            ? "changes_requested"
+            : r.status === "revoked" || r.status === "forwarded" || r.documentId !== file.currentDocumentId
           ? "replaced"
           : r.status === "signed"
             ? fileStatus === "completed"

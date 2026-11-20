@@ -8,8 +8,8 @@ const COPY: Record<Exclude<SigningState, "sign">, (o: { brand: string; doc: stri
   expired: (o) => ({ title: "This link has expired", body: `The signing link for "${o.doc}" has expired. Ask ${o.brand} to send you a new one.` }),
   voided: (o) => ({ title: "This agreement was voided", body: `${o.brand} voided "${o.doc}", so it can no longer be signed. Contact them if you think this is a mistake.` }),
   replaced: (o) => ({ title: "This link was replaced", body: `This link for "${o.doc}" no longer works: it was forwarded or a newer version was sent. Use the most recent email from ${o.brand}, or ask them for a new link.` }),
-  declined: (o) => ({ title: "You declined this agreement", body: `${o.brand} has been told. Contact them if you've changed your mind.` }),
-  changes_requested: (o) => ({ title: "You requested changes", body: `${o.brand} has your comments and will send a revised version.` }),
+  declined: (o) => ({ title: "This agreement was declined", body: `"${o.doc}" was declined, so it can no longer be signed. ${o.brand} may send a revised version.` }),
+  changes_requested: (o) => ({ title: "Waiting for the sender to respond", body: `Changes were requested to "${o.doc}", so signing is paused. You'll get a new link if ${o.brand} sends a revised version.` }),
 };
 
 export function StatePage({

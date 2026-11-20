@@ -78,6 +78,21 @@ export default async function FilePage({ params, searchParams }: { params: Promi
         </Alert>
       )}
 
+      {(file.status === "declined" || file.status === "changes_requested") && (() => {
+        const r = recipients.find((x) => x.status === (file.status === "declined" ? "declined" : "changes_requested") && x.documentId === file.currentDocumentId);
+        return (
+          <Card className={`p-4 ${file.status === "declined" ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`} data-testid="file-response">
+            <p className="font-medium">
+              {file.status === "declined" ? `${r?.name ?? "A signer"} declined to sign` : `${r?.name ?? "A signer"} requested changes`}
+            </p>
+            <p className="mt-1 whitespace-pre-wrap text-sm">{file.status === "declined" ? r?.declineReason : r?.changeComment}</p>
+            <p className="mt-2 text-xs text-muted">Signing is stopped. To continue, upload a revised version and resend it.</p>
+            <a href={`/templates/new?reviseFile=${file.id}`} className="mt-3 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white" data-testid="revise">
+              Upload revised version and resend
+            </a>
+          </Card>
+        );
+      })()}
       {file.status === "voided" && (
         <Alert>
           Voided{file.voidedAt ? <> on {fmt(file.voidedAt)}</> : null}. Reason: {file.voidReason}
