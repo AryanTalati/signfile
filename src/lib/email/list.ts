@@ -23,6 +23,7 @@ export async function listOutbox(auth: AuthContext) {
       toName: schema.outbox.toName,
       subject: schema.outbox.subject,
       status: schema.outbox.status,
+      error: schema.outbox.error,
       createdAt: schema.outbox.createdAt,
       fileId: schema.outbox.fileId,
       client: schema.files.clientLegalName,

@@ -32,6 +32,11 @@ test("client signs, firm countersigns, File completes", async ({ page, browser }
   await expect(page.getByTestId("file-status")).toHaveText("Signed");
   await client.goto(clientLink);
   await expect(client.getByTestId("sign-state-completed")).toBeVisible();
+  // Public footer: verify link only, no firm dashboard/login; no "copy emailed" claim when nothing was sent.
+  await expect(client.getByTestId("signed-footer")).toHaveText("Signed with SignFile · Verify a document");
+  await expect(client.getByTestId("signed-footer").getByRole("link")).toHaveAttribute("href", "/verify");
+  await expect(client.getByRole("link", { name: /log ?in|dashboard/i })).toHaveCount(0);
+  await expect(client.getByTestId("copy-emailed")).toHaveCount(0);
 });
 
 test("draw a signature on the canvas", async ({ page, browser }) => {

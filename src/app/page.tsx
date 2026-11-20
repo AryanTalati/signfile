@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ButtonLink, Wordmark } from "@/components/ui";
 import { getAuth } from "@/lib/auth/session";
@@ -18,9 +19,14 @@ export default async function Home() {
           Log in or try the demo
         </ButtonLink>
       </div>
-      <a href="/verify" className="text-sm text-muted underline">
-        Verify a signed document
-      </a>
+      <p className="flex gap-4 text-sm text-muted">
+        <Link href="/verify" className="underline">
+          Verify a signed document
+        </Link>
+        <Link href="/privacy" className="underline">
+          Privacy
+        </Link>
+      </p>
     </main>
   );
 }

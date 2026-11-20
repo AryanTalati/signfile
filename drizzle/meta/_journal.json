@@ -43,6 +43,13 @@
       "when": 1795121675059,
       "tag": "0005_saved_signature",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795162832334,
+      "tag": "0006_outbox_captured",
+      "breakpoints": true
     }
   ]
 }

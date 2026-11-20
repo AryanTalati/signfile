@@ -274,10 +274,10 @@ async function emailSignedCopy(
       toName: s.name,
       subject: `Signed: "${o.documentName}"`,
       html: `<p>Hi ${s.name.split(" ")[0]},</p><p>Everyone has signed <strong>${o.documentName}</strong> (${o.firm} and ${o.file.clientLegalName}). The signed copy with its certificate of completion is attached, and you can also <a href="${link}">download it here</a>.</p>`,
-      text: `Everyone has signed "${o.documentName}". Download the signed copy: ${link}`,
+      text: `Everyone has signed "${o.documentName}". The signed copy is attached. Download it again: ${link}`,
+      attachments: [{ filename: `${o.documentName} - signed.pdf`.replace(/[^\w .()-]+/g, "_"), storageKey: o.finalKey }],
     });
   }
-  void o.finalKey;
 }
 
 export async function getFinalPdf(file: { finalPdfKey: string | null }) {

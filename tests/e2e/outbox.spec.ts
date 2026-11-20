@@ -13,8 +13,9 @@ test("outbox lists generated emails; an email opens with its body and signing li
   await expect(row).toContainText("please sign");
   await expect(row).toContainText("jamie@example.com");
   await expect(row).toContainText("Globex Test Industries Ltd");
-  await expect(row).toContainText("Not sent (outbox only)");
-  await row.click();
+  await expect(row.getByTestId("email-status")).toHaveAttribute("data-status", "captured");
+  await expect(page.getByTestId("email-retry")).toHaveCount(0);
+  await row.getByTestId("outbox-open").click();
   await expect(page.getByTestId("email-subject")).toContainText("please sign");
   await expect(page.getByTestId("email-links").getByTestId("signing-link").first()).toHaveValue(clientLink);
   await expect(page.frameLocator('[data-testid="email-body"]').getByText("Review and sign")).toBeVisible();

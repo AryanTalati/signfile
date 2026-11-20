@@ -3,6 +3,13 @@ import { Caveat } from "next/font/google";
 import { notFound } from "next/navigation";
 import { getAuth, requestMeta } from "@/lib/auth/session";
 import { getSavedSignature } from "@/lib/users/signature";
+import { and as andOp } from "drizzle-orm";
+
+/** True only if every signed-copy email for this File was actually sent. */
+async function signedCopyAllSent(fileId: string) {
+  const rows = await db.select({ status: schema.outbox.status }).from(schema.outbox).where(andOp(eq(schema.outbox.fileId, fileId), eq(schema.outbox.kind, "signed_copy")));
+  return rows.length > 0 && rows.every((r) => r.status === "sent");
+}
 import { db, schema } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { CONSENT_TEXT, loadSigning, markViewed, signingView } from "@/lib/files/signing";
@@ -30,6 +37,7 @@ export default async function SignPage({ params }: { params: Promise<{ token: st
         recipientName={ctx.recipient.name}
         expiresAt={ctx.file.expiresAt?.toISOString() ?? null}
         downloadUrl={ctx.state === "completed" && ctx.recipient.status === "signed" ? `/api/sign/${token}/download` : undefined}
+        copyEmailed={ctx.state === "completed" ? await signedCopyAllSent(ctx.file.id) : false}
       />
     );
   }

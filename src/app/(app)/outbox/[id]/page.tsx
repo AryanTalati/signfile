@@ -6,6 +6,7 @@ import { CopyLink } from "@/components/files/copy-link";
 import { LocalTime } from "@/components/local-time";
 import { requireAuth } from "@/lib/auth/session";
 import { getOutboxEmail, kindLabel, linksIn } from "@/lib/email/list";
+import { EmailStatus } from "@/components/email-status";
 
 export const metadata: Metadata = { title: "Email · signfile" };
 
@@ -36,7 +37,15 @@ export default async function OutboxEmailPage({ params }: { params: Promise<{ id
             </>
           )}
         </p>
-        {m.status === "skipped" && <p className="mt-1 text-sm text-amber-800">Not sent (outbox only). {m.error}</p>}
+        <p className="mt-1 text-sm">
+          <EmailStatus id={m.id} status={m.status} error={m.error} />
+          {m.sentAt && (
+            <span className="text-muted">
+              {" "}
+              · sent <LocalTime iso={m.sentAt.toISOString()} />
+            </span>
+          )}
+        </p>
       </div>
       {links.length > 0 && (
         <Card className="flex flex-col gap-2 p-4" data-testid="email-links">

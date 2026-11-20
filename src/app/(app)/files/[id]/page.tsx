@@ -7,6 +7,7 @@ import { RetrySeal } from "@/components/files/retry-seal";
 import { FileActions } from "@/components/files/file-actions";
 import { LocalTime } from "@/components/local-time";
 import { eventLabel } from "@/lib/files/event-labels";
+import { EmailStatus } from "@/components/email-status";
 import { FileStatus } from "@/components/files/status";
 import { requireAuth } from "@/lib/auth/session";
 import { getFile, signLink } from "@/lib/files/service";
@@ -73,7 +74,7 @@ export default async function FilePage({ params, searchParams }: { params: Promi
           <div className="mt-2">
             <CopyLink url={signLink(base, live[0].token)} />
           </div>
-          <p className="mt-2 text-xs">The email is in your outbox below. Email delivery isn&apos;t set up yet, so share the link directly.</p>
+          <p className="mt-2 text-xs">The signing email&apos;s delivery status is under Emails below. You can also share this link directly.</p>
         </Alert>
       )}
 
@@ -132,7 +133,7 @@ export default async function FilePage({ params, searchParams }: { params: Promi
               <li key={m.id} className="px-4 py-2.5 text-sm">
                 <span className="font-medium">{m.subject}</span>
                 <span className="block text-xs text-muted">
-                  To {m.toName ? `${m.toName} <${m.toEmail}>` : m.toEmail} · {m.status === "skipped" ? "Not sent (outbox only)" : m.status} · {fmt(m.createdAt)}
+                  To {m.toName ? `${m.toName} <${m.toEmail}>` : m.toEmail} · <EmailStatus id={m.id} status={m.status} error={m.error} /> · {fmt(m.createdAt)}
                 </span>
               </li>
             ))}

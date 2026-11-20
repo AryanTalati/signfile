@@ -12,7 +12,24 @@ const COPY: Record<Exclude<SigningState, "sign">, (o: { brand: string; doc: stri
   changes_requested: (o) => ({ title: "You requested changes", body: `${o.brand} has your comments and will send a revised version.` }),
 };
 
-export function StatePage({ state, brand, documentName, recipientName, expiresAt, downloadUrl }: { state: Exclude<SigningState, "sign">; brand: { name: string; color: string }; documentName: string; recipientName: string; expiresAt: string | null; downloadUrl?: string }) {
+export function StatePage({
+  state,
+  brand,
+  documentName,
+  recipientName,
+  expiresAt,
+  downloadUrl,
+  copyEmailed,
+}: {
+  state: Exclude<SigningState, "sign">;
+  brand: { name: string; color: string };
+  documentName: string;
+  recipientName: string;
+  expiresAt: string | null;
+  downloadUrl?: string;
+  /** True only when the signed-copy emails were actually sent. */
+  copyEmailed?: boolean;
+}) {
   const exp = "";
   const c = COPY[state]({ brand: brand.name, doc: documentName, name: recipientName, exp });
   return (
@@ -28,12 +45,25 @@ export function StatePage({ state, brand, documentName, recipientName, expiresAt
             Expired on <LocalTime iso={expiresAt} dateOnly />
           </p>
         )}
+        {state === "completed" && copyEmailed && (
+          <p className="mt-2 text-sm text-muted" data-testid="copy-emailed">
+            A copy has been emailed to everyone who signed.
+          </p>
+        )}
         {state === "completed" && downloadUrl && (
           <a href={downloadUrl} className="mt-5 inline-block rounded-lg px-5 py-2.5 text-sm font-medium text-white" style={{ background: brand.color }} data-testid="signer-download">
             Download the signed copy
           </a>
         )}
       </div>
+      {state === "completed" && (
+        <footer className="mt-auto py-6 text-center text-sm text-muted" data-testid="signed-footer">
+          Signed with SignFile ·{" "}
+          <a href="/verify" className="underline">
+            Verify a document
+          </a>
+        </footer>
+      )}
     </main>
   );
 }

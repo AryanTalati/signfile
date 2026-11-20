@@ -4,6 +4,7 @@ import { PDFDocument } from "pdf-lib";
 import { pingDatabase } from "@/lib/db/ping";
 import { convertToPdf, ConversionError } from "@/lib/pdf/convert";
 import { storageSelfTest } from "@/lib/storage";
+import { sweepOutbox } from "@/lib/email/outbox";
 import { mb, memoryReport } from "@/lib/system/memory";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,8 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   const deep = new URL(req.url).searchParams.get("deep") === "1";
   const [db, memory] = await Promise.all([pingDatabase(), memoryReport()]);
+  // Piggyback: retry any emails left queued (the uptime pinger hits this every 5 min). Never awaited.
+  if (db.ok) void sweepOutbox().catch(() => undefined);
 
   const body: Record<string, unknown> = {
     ok: db.ok || !db.configured,

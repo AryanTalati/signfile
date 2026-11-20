@@ -56,7 +56,7 @@ export const recipientStatus = pgEnum("recipient_status", [
   "revoked", // voided File, superseded document version, or resend
 ]);
 
-export const outboxStatus = pgEnum("outbox_status", ["queued", "sent", "failed", "skipped"]);
+export const outboxStatus = pgEnum("outbox_status", ["queued", "sent", "failed", "skipped", "captured"]);
 
 // ---------- Companies & users ----------
 
