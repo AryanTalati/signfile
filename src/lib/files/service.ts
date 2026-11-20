@@ -30,6 +30,8 @@ export const createFileSchema = z.object({
   countersignerId: z.string().uuid().optional(),
   /** "Firm signs when sending": the sender (as the firm signer) signs now with their saved signature. */
   signNow: z.boolean().optional().default(false),
+  /** Off: the File is saved as a Draft (no links, no emails) and sent later from its page. Default on (CSV/API). */
+  sendNow: z.boolean().optional().default(true),
   firmValues: z.record(z.string(), z.string().trim().max(500)).default({}),
 });
 export type CreateFileInput = z.infer<typeof createFileSchema>;
@@ -58,7 +60,7 @@ export async function listCountersigners(auth: AuthContext) {
     .orderBy(asc(schema.users.name));
 }
 
-/** Creates a File from a template and sends it: snapshot, signers, links, outbox. */
+/** Creates a File from a template (snapshot, signers, links) and, unless saved as a draft, sends it. */
 export async function createAndSendFile(auth: AuthContext, input: CreateFileInput, baseUrl: string) {
   const t = await getTemplate(auth, input.templateId);
   if (!t) throw new FileInputError("That template no longer exists.", "templateId");
@@ -96,18 +98,13 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
   const pdfKey = `${auth.company.id}/files/${fileId}/v1/document.pdf`;
   await copyObject(v.pdfKey, pdfKey);
 
-  const [company] = await db
-    .select({ linkExpiryDays: schema.companies.linkExpiryDays, brandColor: schema.companies.brandColor })
-    .from(schema.companies)
-    .where(eq(schema.companies.id, auth.company.id));
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + (company?.linkExpiryDays ?? 30) * 86_400_000);
   const clientRole = roles.find((r) => r.kind === "client") ?? roles[0];
   const firmRole = roles.find((r) => r.kind === "firm");
   const clientToken = newToken();
   const firmToken = newToken();
   const firmFirst = isFirmFirst(roles) && !!countersigner;
-  if (firmFirst && input.signNow && countersigner?.id !== auth.user.id) throw new FileInputError("Only the person signing for your firm can sign now. Choose yourself, or let them sign first.", "countersignerId");
+  const signNow = input.signNow && input.sendNow;
+  if (firmFirst && signNow && countersigner?.id !== auth.user.id) throw new FileInputError("Only the person signing for your firm can sign now. Choose yourself, or let them sign first.", "countersignerId");
   const { ip, userAgent } = await requestMeta();
   const actor = { actorType: "user", actorId: auth.user.id, actorLabel: auth.user.name, ip, userAgent } as const;
 
@@ -120,9 +117,7 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
       reference: input.reference || null,
       clientLegalName: input.clientLegalName,
       firmValues,
-      status: "sent",
-      expiresAt,
-      sentAt: now,
+      status: "draft",
     });
     await tx.insert(schema.fileDocuments).values({
       id: documentId,
@@ -141,7 +136,7 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
     });
     await tx.update(schema.files).set({ currentDocumentId: documentId }).where(eq(schema.files.id, fileId));
 
-    const [client] = await tx
+    await tx
       .insert(schema.recipients)
       .values({
         companyId: auth.company.id,
@@ -153,13 +148,10 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
         title: input.signerTitle || null,
         email: input.signerEmail,
         token: clientToken,
-        status: firmFirst ? "waiting" : "active",
-        activatedAt: firmFirst ? null : now,
-      })
-      .returning({ id: schema.recipients.id });
-    let firmRecipientId: string | null = null;
+        status: "waiting",
+      });
     if (countersigner && firmRole) {
-      const [firm] = await tx
+      await tx
         .insert(schema.recipients)
         .values({
           companyId: auth.company.id,
@@ -172,63 +164,24 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
           title: countersigner.title,
           email: countersigner.email,
           token: firmToken,
-          status: firmFirst ? "active" : "waiting",
-          activatedAt: firmFirst ? now : null,
-        })
-        .returning({ id: schema.recipients.id });
-      firmRecipientId = firm.id;
+          status: "waiting",
+        });
     }
 
-    await tx.insert(schema.events).values([
-      {
-        ...actor,
-        companyId: auth.company.id,
-        fileId,
-        type: "file.created",
-        data: { template: t.template.name, templateVersion: v.version, clientLegalName: input.clientLegalName, reference: input.reference || null },
-      },
-      {
-        ...actor,
-        companyId: auth.company.id,
-        fileId,
-        recipientId: client.id,
-        type: "file.sent",
-        data: {
-          documentVersion: 1,
-          documentSha256: v.pdfSha256,
-          sourceSha256: v.sourceSha256,
-          to: { name: input.signerName, email: input.signerEmail, title: input.signerTitle || null },
-          countersigner: countersigner ? { name: countersigner.name, email: countersigner.email } : null,
-          firmRecipientId,
-          expiresAt: expiresAt.toISOString(),
-        },
-      },
-    ]);
-
-    const brand = { name: auth.company.name, color: company?.brandColor ?? auth.company.brandColor };
-    if (!firmFirst) {
-      const email = signRequestEmail({
-        brand,
-        recipientName: input.signerName,
-        documentName: t.template.name,
-        clientLegalName: input.clientLegalName,
-        link: signLink(baseUrl, clientToken),
-        expiresAt,
-        senderName: auth.user.name,
-        countersign,
-      });
-      await recordEmail(tx, { companyId: auth.company.id, fileId, recipientId: client.id, kind: "sign_request", toEmail: input.signerEmail, toName: input.signerName, ...email });
-    } else if (!input.signNow && countersigner && firmRecipientId) {
-      // The firm signs first; the client is emailed once they have.
-      const email = firmSignFirstEmail({ brand, recipientName: countersigner.name, documentName: t.template.name, clientLegalName: input.clientLegalName, link: signLink(baseUrl, firmToken) });
-      await recordEmail(tx, { companyId: auth.company.id, fileId, recipientId: firmRecipientId, kind: "firm_sign_first", toEmail: countersigner.email, toName: countersigner.name, ...email });
-    }
+    await tx.insert(schema.events).values({
+      ...actor,
+      companyId: auth.company.id,
+      fileId,
+      type: "file.created",
+      data: { template: t.template.name, templateVersion: v.version, clientLegalName: input.clientLegalName, reference: input.reference || null, draft: !input.sendNow },
+    });
+    if (input.sendNow) await dispatch(tx, auth, fileId, baseUrl, { skipFirmEmail: signNow });
   });
 
   // "Firm signs when sending": the sender signs now with their saved signature (their own consent
   // and signing events). If that can't complete, the File simply waits for them to sign.
   let signNowError: string | null = null;
-  if (firmFirst && input.signNow) {
+  if (firmFirst && signNow) {
     const { getSavedSignature } = await import("@/lib/users/signature");
     const { loadSigning, quickSign } = await import("./signing");
     const saved = await getSavedSignature(auth.user.id);
@@ -240,6 +193,76 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
       });
   }
   return { fileId, signNowError };
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Sends a Draft File: the first signer's link goes live, links get their expiry, and the
+ * first signer is emailed (the client, or the firm signer first under "firm signs when
+ * sending"). Shared by create-and-send and "Send now" on a Draft.
+ */
+async function dispatch(tx: Tx, auth: AuthContext, fileId: string, baseUrl: string, opts: { skipFirmEmail?: boolean } = {}) {
+  const [file] = await tx
+    .select()
+    .from(schema.files)
+    .where(and(eq(schema.files.id, fileId), eq(schema.files.companyId, auth.company.id)))
+    .for("update");
+  if (!file) throw new FileInputError("File not found.");
+  if (file.status !== "draft") throw new FileInputError("This File has already been sent.");
+  const [[doc], recips, [company], [t]] = await Promise.all([
+    tx.select().from(schema.fileDocuments).where(eq(schema.fileDocuments.id, file.currentDocumentId!)),
+    tx.select().from(schema.recipients).where(eq(schema.recipients.documentId, file.currentDocumentId!)).orderBy(asc(schema.recipients.signingOrder)),
+    tx.select({ linkExpiryDays: schema.companies.linkExpiryDays, brandColor: schema.companies.brandColor }).from(schema.companies).where(eq(schema.companies.id, auth.company.id)),
+    file.templateId ? tx.select({ name: schema.templates.name }).from(schema.templates).where(eq(schema.templates.id, file.templateId)) : Promise.resolve([]),
+  ]);
+  const client = recips.find((r) => !r.userId) ?? recips[0];
+  const firm = recips.find((r) => r.userId) ?? null;
+  const firmFirst = isFirmFirst(doc.roles) && !!firm;
+  const first = firmFirst ? firm! : client;
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + (company?.linkExpiryDays ?? 30) * 86_400_000);
+  const { ip, userAgent } = await requestMeta();
+
+  await tx.update(schema.recipients).set({ status: "active", activatedAt: now }).where(eq(schema.recipients.id, first.id));
+  await tx.update(schema.files).set({ status: "sent", sentAt: now, expiresAt, updatedAt: now }).where(eq(schema.files.id, fileId));
+  await tx.insert(schema.events).values({
+    companyId: auth.company.id,
+    fileId,
+    recipientId: client.id,
+    actorType: "user",
+    actorId: auth.user.id,
+    actorLabel: auth.user.name,
+    type: "file.sent",
+    data: {
+      documentVersion: doc.versionNo,
+      documentSha256: doc.pdfSha256,
+      sourceSha256: doc.sourceSha256,
+      to: { name: client.name, email: client.email, title: client.title },
+      countersigner: firm ? { name: firm.name, email: firm.email } : null,
+      firmRecipientId: firm?.id ?? null,
+      expiresAt: expiresAt.toISOString(),
+    },
+    ip,
+    userAgent,
+  });
+
+  const brand = { name: auth.company.name, color: company?.brandColor ?? auth.company.brandColor };
+  const documentName = t?.name ?? "the agreement";
+  if (!firmFirst) {
+    const email = signRequestEmail({ brand, recipientName: client.name, documentName, clientLegalName: file.clientLegalName, link: signLink(baseUrl, client.token), expiresAt, senderName: auth.user.name, countersign: !!firm });
+    await recordEmail(tx, { companyId: auth.company.id, fileId, recipientId: client.id, kind: "sign_request", toEmail: client.email, toName: client.name, ...email });
+  } else if (!opts.skipFirmEmail) {
+    // The firm signs first; the client is emailed once they have.
+    const email = firmSignFirstEmail({ brand, recipientName: firm!.name, documentName, clientLegalName: file.clientLegalName, link: signLink(baseUrl, firm!.token) });
+    await recordEmail(tx, { companyId: auth.company.id, fileId, recipientId: firm!.id, kind: "firm_sign_first", toEmail: firm!.email, toName: firm!.name, ...email });
+  }
+}
+
+/** "Send now" on a Draft File. */
+export async function sendDraft(auth: AuthContext, fileId: string, baseUrl: string) {
+  if (!z.string().uuid().safeParse(fileId).success) throw new FileInputError("File not found.");
+  await db.transaction((tx) => dispatch(tx, auth, fileId, baseUrl));
 }
 
 async function defaultCountersignerId(auth: AuthContext) {

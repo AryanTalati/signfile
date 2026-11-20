@@ -5,6 +5,7 @@ import { Alert, Card } from "@/components/ui";
 import { CopyLink } from "@/components/files/copy-link";
 import { RetrySeal } from "@/components/files/retry-seal";
 import { FileActions } from "@/components/files/file-actions";
+import { SendDraft } from "@/components/files/send-draft";
 import { LocalTime } from "@/components/local-time";
 import { eventLabel } from "@/lib/files/event-labels";
 import { EmailStatus } from "@/components/email-status";
@@ -54,7 +55,15 @@ export default async function FilePage({ params, searchParams }: { params: Promi
         </div>
         <p className="mt-1 text-sm text-muted">
           {templateName}
-          {file.reference ? ` · Ref ${file.reference}` : ""} · Sent <span data-testid="sent-at">{fmt(file.sentAt)}</span>
+          {file.reference ? ` · Ref ${file.reference}` : ""}
+          {file.sentAt ? (
+            <>
+              {" "}
+              · Sent <span data-testid="sent-at">{fmt(file.sentAt)}</span>
+            </>
+          ) : (
+            " · Not sent yet"
+          )}
         </p>
       </div>
 
@@ -69,6 +78,9 @@ export default async function FilePage({ params, searchParams }: { params: Promi
             Download signed PDF
           </a>
         </Card>
+      )}
+      {file.status === "draft" && recipients.length > 0 && (
+        <SendDraft fileId={file.id} firstSigner={recipients[0].name /* sorted by signing order */} />
       )}
       {signNowError && <Alert>Couldn&apos;t sign while sending: {signNowError}</Alert>}
       {sent && live[0] && live[0].userId !== auth.user.id && (
@@ -118,7 +130,7 @@ export default async function FilePage({ params, searchParams }: { params: Promi
               {r.title && <span className="text-sm text-muted">{r.title}</span>}
               <span className="text-sm text-muted">{r.email}</span>
               <span className="ml-auto text-sm" data-testid="recipient-status">
-                {RECIPIENT_STATUS[r.status] ?? r.status}
+                {file.status === "draft" ? "Not sent yet" : (RECIPIENT_STATUS[r.status] ?? r.status)}
               </span>
             </div>
             {(r.status === "active" || r.status === "viewed") && r.userId === auth.user.id && (

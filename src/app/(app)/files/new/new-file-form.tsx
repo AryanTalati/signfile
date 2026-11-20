@@ -24,6 +24,7 @@ export function NewFileForm(props: {
   const blocked = props.problems.length > 0;
   const [signer, setSigner] = useState(v.countersignerId ?? props.defaultCountersignerId);
   const signerIsMe = signer === props.defaultCountersignerId;
+  const [sendNow, setSendNow] = useState(v.sendNow === undefined ? true : v.sendNow === "on");
 
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
@@ -107,7 +108,7 @@ export function NewFileForm(props: {
           ) : (
             <p className="text-sm text-muted">They get their link after the client signs.</p>
           ))}
-          {props.firmFirst && signerIsMe && props.mySavedSignature && (
+          {props.firmFirst && signerIsMe && props.mySavedSignature && sendNow && (
             <label className="mt-2 flex items-start gap-3 rounded-lg border border-border p-3 text-sm" data-testid="sign-now">
               <input type="checkbox" name="signNow" defaultChecked className="mt-1" />
               <span>
@@ -128,8 +129,15 @@ export function NewFileForm(props: {
         </Card>
       )}
 
+      <label className="flex items-start gap-3 text-sm" data-testid="send-now">
+        <input type="checkbox" name="sendNow" checked={sendNow} onChange={(e) => setSendNow(e.target.checked)} className="mt-1" />
+        <span>
+          <span className="font-medium">Send immediately</span>
+          <span className="block text-xs text-muted">Turn off to save it as a Draft. Nothing goes out until you press Send now on the File.</span>
+        </span>
+      </label>
       <Button type="submit" disabled={pending || blocked} className="self-start">
-        {pending ? "Sending…" : "Send for signature"}
+        {pending ? (sendNow ? "Sending…" : "Saving…") : sendNow ? "Send for signature" : "Save as draft"}
       </Button>
     </form>
   );
