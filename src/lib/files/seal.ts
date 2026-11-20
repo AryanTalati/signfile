@@ -90,7 +90,7 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
         signedAt: s.signedAt,
         signature: Object.entries(s.values ?? {}).find(([k, val]) => typeof val === "string" && val.startsWith("data:image/png") && doc.fields.find((x) => x.id === k)?.type === "signature")?.[1] as string | undefined,
       })),
-      events: events.map((e) => ({ at: e.createdAt, type: e.type, actor: e.actorLabel ?? e.actorType, ip: e.ip, data: e.data })),
+      events: eventsForSignedVersion(events).map((e) => ({ at: e.createdAt, type: e.type, actor: e.actorLabel ?? e.actorType, ip: e.ip, data: e.data })),
     });
 
     pdf.setTitle(`${template?.name ?? "Agreement"} (signed)`);
@@ -282,4 +282,14 @@ async function emailSignedCopy(
 
 export async function getFinalPdf(file: { finalPdfKey: string | null }) {
   return file.finalPdfKey ? getObject(file.finalPdfKey) : null;
+}
+
+/**
+ * The certificate describes only the version that was signed: events from the last
+ * revision onward (plus the File's creation). Earlier versions stay in the File's timeline.
+ */
+function eventsForSignedVersion<T extends { id: number; type: string }>(events: T[]): T[] {
+  const lastRevision = [...events].reverse().find((e) => e.type === "file.revised");
+  if (!lastRevision) return events;
+  return events.filter((e) => e.type === "file.created" || e.id >= lastRevision.id);
 }

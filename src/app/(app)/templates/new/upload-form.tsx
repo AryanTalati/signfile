@@ -15,7 +15,7 @@ type Phase =
   | { kind: "error"; message: string };
 const BUSY_RETRIES = 12; // ~1 minute
 
-export function UploadForm() {
+export function UploadForm({ reviseFile }: { reviseFile?: string }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -39,6 +39,7 @@ export function UploadForm() {
   function upload(f: File, attempt = 0) {
     const body = new FormData();
     body.append("file", f);
+    if (reviseFile) body.append("reviseFile", reviseFile);
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/templates");
     xhr.upload.onprogress = (e) => e.lengthComputable && setPhase({ kind: "uploading", pct: Math.round((e.loaded / e.total) * 100) });

@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { AuthContext } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
@@ -43,11 +43,26 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-export function createTemplateFromUpload(auth: AuthContext, file: { name: string; bytes: Uint8Array }, signal?: AbortSignal) {
-  return exclusive(() => processUpload(auth, file, signal));
+export class RevisionError extends Error {}
+
+export function createTemplateFromUpload(auth: AuthContext, file: { name: string; bytes: Uint8Array }, signal?: AbortSignal, reviseFileId?: string) {
+  return exclusive(() => processUpload(auth, file, signal, reviseFileId));
 }
 
-async function processUpload(auth: AuthContext, file: { name: string; bytes: Uint8Array }, signal?: AbortSignal) {
+async function processUpload(auth: AuthContext, file: { name: string; bytes: Uint8Array }, signal?: AbortSignal, reviseFileId?: string) {
+  // A revised version for one File: only for a Declined / Changes-requested File of this company.
+  let revisionName: string | null = null;
+  if (reviseFileId) {
+    if (!z.string().uuid().safeParse(reviseFileId).success) throw new RevisionError("That File doesn't exist.");
+    const [f] = await db
+      .select({ status: schema.files.status, client: schema.files.clientLegalName, templateName: schema.templates.name })
+      .from(schema.files)
+      .leftJoin(schema.templates, eq(schema.templates.id, schema.files.templateId))
+      .where(and(eq(schema.files.id, reviseFileId), eq(schema.files.companyId, auth.company.id)));
+    if (!f) throw new RevisionError("That File doesn't exist.");
+    if (f.status !== "declined" && f.status !== "changes_requested") throw new RevisionError("Only a declined File, or one with changes requested, can get a revised version.");
+    revisionName = `${f.templateName ?? "Agreement"} (revised for ${f.client})`.slice(0, 120);
+  }
   // The uploader may have given up while this waited in line: don't do the work for nobody.
   const check = () => {
     if (signal?.aborted) throw new AbortedError("upload abandoned");
@@ -68,9 +83,9 @@ async function processUpload(auth: AuthContext, file: { name: string; bytes: Uin
   await putObject(sourceKey, file.bytes, prepared.source.mime);
   await putObject(pdfKey, prepared.pdf, "application/pdf");
 
-  const name = cleanName(file.name);
+  const name = revisionName ?? cleanName(file.name);
   await db.transaction(async (tx) => {
-    await tx.insert(schema.templates).values({ id: templateId, companyId: auth.company.id, name, createdById: auth.user.id });
+    await tx.insert(schema.templates).values({ id: templateId, companyId: auth.company.id, name, createdById: auth.user.id, revisionForFileId: reviseFileId ?? null });
     await tx.insert(schema.templateVersions).values({
       companyId: auth.company.id,
       templateId,
@@ -137,7 +152,7 @@ export async function listTemplates(auth: AuthContext) {
       schema.templateVersions,
       and(eq(schema.templateVersions.templateId, schema.templates.id), eq(schema.templateVersions.version, schema.templates.currentVersion)),
     )
-    .where(eq(schema.templates.companyId, auth.company.id))
+    .where(and(eq(schema.templates.companyId, auth.company.id), isNull(schema.templates.revisionForFileId)))
     .orderBy(desc(schema.templates.updatedAt));
   return rows;
 }

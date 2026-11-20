@@ -29,13 +29,16 @@ const RECIPIENT_STATUS: Record<string, string> = {
 
 const fmt = (d: Date | null) => (d ? <LocalTime iso={d.toISOString()} /> : null);
 
-export default async function FilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ sent?: string; signNowError?: string }> }) {
+export default async function FilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ sent?: string; signNowError?: string; revised?: string }> }) {
   const auth = await requireAuth();
   const { id } = await params;
-  const { sent, signNowError } = await searchParams;
+  const { sent: sentParam, signNowError, revised } = await searchParams;
+  const sent = sentParam || revised;
   const data = await getFile(auth, id);
   if (!data) notFound();
-  const { file, recipients, events, emails, templateName } = data;
+  const { file, events, emails, templateName, documents } = data;
+  // Signers of the current version (earlier versions' signers are history, shown in the timeline).
+  const recipients = data.recipients.filter((r) => r.documentId === file.currentDocumentId);
   const base = await appUrl();
   const live = recipients.filter((r) => r.status === "active" || r.status === "viewed");
 
@@ -127,6 +130,22 @@ export default async function FilePage({ params, searchParams }: { params: Promi
         ))}
       </Card>
 
+      {documents.length > 1 && (
+        <Card className="p-4" data-testid="versions">
+          <h2 className="text-sm font-semibold">Versions</h2>
+          <ul className="mt-2 space-y-1 text-sm">
+            {documents
+              .slice()
+              .reverse()
+              .map((d) => (
+                <li key={d.id}>
+                  Version {d.versionNo} · {d.sourceFilename}
+                  {d.id === file.currentDocumentId ? <span className="ml-2 font-medium text-green-700">current</span> : <span className="ml-2 text-muted">superseded {d.supersededAt ? <>{fmt(d.supersededAt)}</> : null}</span>}
+                </li>
+              ))}
+          </ul>
+        </Card>
+      )}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <h2 className="px-4 py-3 text-sm font-semibold">Timeline</h2>

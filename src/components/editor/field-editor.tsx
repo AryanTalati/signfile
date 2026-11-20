@@ -21,6 +21,8 @@ export interface EditorProps {
   detection: { outcome?: string; warnings?: string[]; notes?: string[]; detectedCount?: number } | null;
   firmName: string;
   isNew: boolean;
+  /** Set when this is a revised version uploaded for one File. */
+  reviseFile?: { id: string; client: string } | null;
 }
 
 type Save = { state: "saved" | "dirty" | "saving" | "error"; message?: string };
@@ -505,10 +507,13 @@ export function FieldEditor(props: EditorProps) {
               {appending ? "Adding signature page…" : "+ Append a signature page instead"}
             </button>
           )}
-          {problems.length === 0 && (
+          {problems.length === 0 && !props.reviseFile && (
             <ButtonLink href={`/files/new?template=${props.templateId}`} className="mb-2 w-full">
               Create a File with this template
             </ButtonLink>
+          )}
+          {props.reviseFile && (
+            <ResendRevision fileId={props.reviseFile.id} client={props.reviseFile.client} templateId={props.templateId} disabled={problems.length > 0 || appending} flush={saveNow} />
           )}
           <ButtonLink href="/templates" variant="secondary" className="w-full">
             Done
@@ -694,5 +699,33 @@ function SaveBadge({ save, onRetry }: { save: Save; onRetry: () => void }) {
     <span className="text-sm text-muted" role="status" data-testid="save-state">
       {save.state === "saving" ? "Saving…" : save.state === "dirty" ? "Unsaved changes" : "All changes saved"}
     </span>
+  );
+}
+
+function ResendRevision({ fileId, client, templateId, disabled, flush }: { fileId: string; client: string; templateId: string; disabled: boolean; flush: () => Promise<void> }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="mb-2">
+      <Button
+        className="w-full"
+        disabled={disabled || busy}
+        data-testid="resend-revision"
+        onClick={async () => {
+          setBusy(true);
+          setError(null);
+          await flush();
+          const res = await fetch(`/api/files/${fileId}/revise`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ templateId }) });
+          const data = await res.json().catch(() => ({}));
+          setBusy(false);
+          if (!res.ok) return setError(data.error ?? "Couldn't send the revised version.");
+          router.push(`/files/${fileId}?revised=1`);
+        }}
+      >
+        {busy ? "Sending…" : `Resend revised version to ${client}`}
+      </Button>
+      {error && <p className="mt-1 text-sm text-red-700">{error}</p>}
+    </div>
   );
 }
