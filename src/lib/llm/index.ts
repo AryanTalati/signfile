@@ -10,7 +10,10 @@ import { mockReview } from "./mock";
  * ANTHROPIC_API_KEY and is never logged. Callers must treat any failure as "no AI result".
  */
 
-export const MODEL = process.env.AI_MODEL || "claude-opus-5-5";
+/** Cheapest current model that returns the schema reliably (structured outputs). AI_MODEL overrides. */
+export const MODEL = process.env.AI_MODEL || "claude-haiku-5-5";
+/** Server-side refusal fallback exists for the larger models only (not Haiku). */
+const FALLBACK_OK = /^claude-(opus|fable|sonnet)-5/.test(MODEL);
 const MAX_OUTPUT_TOKENS = 8_000;
 const TIMEOUT_MS = 60_000;
 /** Agreements longer than this aren't sent (falls back to the rules); never silently truncated. */
@@ -30,9 +33,8 @@ const anthropicProvider: Provider = {
         model: MODEL,
         max_tokens: MAX_OUTPUT_TOKENS,
         output_config: { effort: "low", format: betaZodOutputFormat(AgreementReviewSchema) },
-        // A policy decline is re-run on a fallback model inside the same call.
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
+        // On models that support it, a policy decline is re-run on a fallback model in the same call.
+        ...(FALLBACK_OK ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
         system: REVIEW_SYSTEM,
         messages: [{ role: "user", content: renderInput(input) }],
       },
