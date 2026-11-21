@@ -25,11 +25,12 @@ export function Field({
   name,
   error,
   hint,
+  className,
   ...props
 }: ComponentProps<"input"> & { label: string; name: string; error?: string; hint?: ReactNode }) {
   const id = props.id ?? name;
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex min-w-0 flex-col gap-1.5">
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
@@ -39,8 +40,12 @@ export function Field({
         aria-invalid={!!error}
         aria-describedby={error ? `${id}-error` : undefined}
         className={cx(
-          "rounded-lg border bg-surface px-3 py-2.5 text-base sm:text-sm outline-none transition focus:ring-2 focus:ring-brand/30",
+          "block w-full min-w-0 rounded-lg border bg-surface px-3 py-2.5 text-base sm:text-sm outline-none transition focus:ring-2 focus:ring-brand/30",
+          // Native date pickers (Safari especially) keep a narrow intrinsic width and center or
+          // clip the value: make them a normal full-width, left-aligned box with room for "November 20, 2026".
+          props.type === "date" && "min-h-11 min-w-48 appearance-none text-left [&::-webkit-date-and-time-value]:text-left",
           error ? "border-red-500" : "border-border focus:border-brand",
+          className,
         )}
         {...props}
       />
