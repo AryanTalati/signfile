@@ -95,3 +95,33 @@ test("a hand-added Company field snaps to its blank and takes the signer of its 
   }
   await saved(page);
 });
+
+test("Back after upload goes to Templates (not an empty upload step); the unfinished template is a Draft that reopens with its fields", async ({ page }) => {
+  await signupFresh(page, "E2E Editor Co");
+  await page.goto("/templates");
+  await page.getByRole("link", { name: "Upload agreement" }).first().click();
+  await page.waitForURL(/\/templates\/new/);
+  await page.getByTestId("upload-input").setInputFiles(SAAS);
+  await page.waitForURL(/\/templates\/[0-9a-f-]{36}\?new=1/, { timeout: 120_000 });
+  const editorUrl = page.url().replace("?new=1", "");
+  await expect(page.getByTestId("field")).toHaveCount(10);
+
+  // An edit, then Back right away (before the autosave delay): it's saved on the way out.
+  await field(page, "client", "title").click();
+  await page.getByTestId("inspector").getByRole("radio", { name: "Text" }).click();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/templates$/);
+  await expect(page.getByTestId("upload-input")).toHaveCount(0);
+
+  const row = page.getByTestId("template-row").filter({ hasText: "pdf-saas-table" });
+  await expect(row.getByTestId("template-draft")).toHaveText("Draft");
+  await row.click();
+  await expect(page).toHaveURL(editorUrl);
+  await expect(page.getByTestId("field")).toHaveCount(10);
+  await expect(field(page, "client", "text")).toHaveCount(1); // the last edit was kept
+
+  // Done finishes it: no longer a Draft.
+  await page.getByRole("link", { name: "Done" }).click();
+  await expect(page).toHaveURL(/\/templates$/);
+  await expect(page.getByTestId("template-row").filter({ hasText: "pdf-saas-table" }).getByTestId("template-draft")).toHaveCount(0);
+});

@@ -154,6 +154,8 @@ export const templates = pgTable(
     name: text("name").notNull(),
     currentVersion: integer("current_version").notNull().default(1),
     archivedAt: ts("archived_at"),
+    /** Null while a Draft: uploaded but never finished (Done, or a File created from it). */
+    setupDoneAt: ts("setup_done_at"),
     /** Set for a revised version uploaded for one File; hidden from the Templates list. */
     revisionForFileId: uuid("revision_for_file_id").references((): AnyPgColumn => files.id, { onDelete: "set null" }),
     createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),

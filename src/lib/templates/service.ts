@@ -168,6 +168,7 @@ export async function listTemplates(auth: AuthContext) {
       name: schema.templates.name,
       updatedAt: schema.templates.updatedAt,
       archivedAt: schema.templates.archivedAt,
+      setupDoneAt: schema.templates.setupDoneAt,
       version: schema.templateVersions.version,
       pageCount: schema.templateVersions.pageCount,
       fields: schema.templateVersions.fields,
@@ -362,4 +363,15 @@ export async function snapField(auth: AuthContext, templateId: string, input: z.
   const r = await templateLayout(auth, templateId);
   if (!r) return null;
   return snapPlacement(r.layout[input.page - 1], input);
+}
+
+/** The firm finished setting the template up (Done, or created a File): it's no longer a Draft. */
+export async function markTemplateDone(auth: AuthContext, templateId: string) {
+  if (!z.string().uuid().safeParse(templateId).success) return false;
+  const r = await db
+    .update(schema.templates)
+    .set({ setupDoneAt: new Date() })
+    .where(and(eq(schema.templates.id, templateId), eq(schema.templates.companyId, auth.company.id), isNull(schema.templates.setupDoneAt)))
+    .returning({ id: schema.templates.id });
+  return r.length > 0;
 }

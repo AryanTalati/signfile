@@ -140,6 +140,26 @@ export function FieldEditor(props: EditorProps) {
   const shownSave: Save = save.state === "error" || save.state === "saving" ? save : { state: unsaved ? "dirty" : "saved" };
   const problems = useMemo(() => validateFields(fields, rolesFor(countersign, firmFirst), props.pages.length), [fields, countersign, firmFirst, props.pages.length]);
 
+  // Leaving the editor inside the app (Back, a header link) with edits not yet saved: send
+  // them on the way out, so nothing typed in the last moment is lost.
+  useEffect(
+    () => () => {
+      const l = latest.current;
+      if (appendingRef.current || snapshot(l.name, l.countersign, l.firmFirst, l.fields, l.parked) === confirmed.current) return;
+      const body = JSON.stringify({ pdfSha256: props.pdfSha256, name: l.name.trim() || "Untitled agreement", countersign: l.countersign, firmFirst: l.countersign && l.firmFirst, fields: l.fields, parkedFields: l.parked });
+      void fetch(`/api/templates/${props.templateId}`, { method: "PUT", headers: { "content-type": "application/json" }, body, keepalive: body.length < 60_000 }).catch(() => undefined);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once, on unmount
+    [],
+  );
+
+  /** Save, mark the template finished (no longer a Draft), then go. */
+  async function finish(href: string) {
+    await saveNow();
+    await fetch(`/api/templates/${props.templateId}/done`, { method: "POST" }).catch(() => undefined);
+    router.push(href);
+  }
+
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
       const l = latest.current;
@@ -564,7 +584,14 @@ export function FieldEditor(props: EditorProps) {
             </button>
           )}
           {problems.length === 0 && !props.reviseFile && (
-            <ButtonLink href={`/files/new?template=${props.templateId}`} className="mb-2 w-full">
+            <ButtonLink
+              href={`/files/new?template=${props.templateId}`}
+              className="mb-2 w-full"
+              onClick={(e) => {
+                e.preventDefault();
+                void finish(`/files/new?template=${props.templateId}`);
+              }}
+            >
               Create a File with this template
             </ButtonLink>
           )}
@@ -582,7 +609,15 @@ export function FieldEditor(props: EditorProps) {
               Back to the revised version for {props.reviseFile.client}
             </a>
           )}
-          <ButtonLink href="/templates" variant="secondary" className="w-full">
+          <ButtonLink
+            href="/templates"
+            variant="secondary"
+            className="w-full"
+            onClick={(e) => {
+              e.preventDefault();
+              void finish("/templates");
+            }}
+          >
             Done
           </ButtonLink>
           {props.detection?.notes?.length ? <p className="mt-3 text-xs text-muted">{props.detection.notes.join(" ")}</p> : null}

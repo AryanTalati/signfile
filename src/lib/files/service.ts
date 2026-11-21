@@ -10,7 +10,7 @@ import { firmSignFirstEmail, signRequestEmail } from "@/lib/email/templates";
 import { isFirmFirst } from "@/lib/fields/validate";
 import { recordEmail } from "@/lib/email/outbox";
 import { validateFields } from "@/lib/fields/validate";
-import { getTemplate } from "@/lib/templates/service";
+import { getTemplate, markTemplateDone } from "@/lib/templates/service";
 import { copyObject } from "@/lib/storage";
 
 /**
@@ -179,6 +179,7 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
     if (input.sendNow) await dispatch(tx, auth, fileId, baseUrl, { skipFirmEmail: signNow });
   });
   if (input.sendNow) emit({ event: "file.sent", companyId: auth.company.id, fileId, baseUrl });
+  await markTemplateDone(auth, t.template.id); // a File was created from it: no longer a Draft
 
   // "Firm signs when sending": the sender signs now with their saved signature (their own consent
   // and signing events). If that can't complete, the File simply waits for them to sign.

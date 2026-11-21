@@ -49,7 +49,7 @@ export function UploadForm({ reviseFile }: { reviseFile?: string }) {
       try {
         data = JSON.parse(xhr.responseText);
       } catch {}
-      if (xhr.status === 201 && data.id) router.push(data.reviseFile ? `/files/${data.reviseFile}/revise?template=${data.id}` : `/templates/${data.id}?new=1`);
+      if (xhr.status === 201 && data.id) router.replace(data.reviseFile ? `/files/${data.reviseFile}/revise?template=${data.id}` : `/templates/${data.id}?new=1`); // Back skips the (finished) upload step
       else if (xhr.status === 503 && attempt < BUSY_RETRIES) {
         // Server is processing other documents: wait our turn instead of failing.
         setPhase({ kind: "queued", attempt: attempt + 1 });
