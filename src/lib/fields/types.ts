@@ -49,13 +49,18 @@ export interface FieldDef {
   reason?: string;
   /** A person confirmed, moved or edited it in the editor. Clears the low-confidence flag. */
   reviewed?: boolean;
+  /**
+   * Set when the AI review proposed this field or disagreed with the rules about it. The field
+   * stays in "Check fields" until a person confirms it, whatever its confidence (never auto-confirmed).
+   */
+  ai?: { suggestion: string; confidence: number };
 }
 
 export const REVIEW_THRESHOLD = 0.7;
 /** Field types nobody signs: filled by the firm at File creation, or by the system. */
 export const NO_SIGNER_TYPES: FieldType[] = ["firm_fill", "agreement_date"];
 export const hasNoSigner = (t: FieldType) => NO_SIGNER_TYPES.includes(t);
-export const needsReview = (f: FieldDef) => !f.reviewed && f.source !== "manual" && f.confidence < REVIEW_THRESHOLD;
+export const needsReview = (f: FieldDef) => !f.reviewed && f.source !== "manual" && (f.confidence < REVIEW_THRESHOLD || !!f.ai);
 
 export interface PageInfo {
   /** Media box size in PDF points, before rotation. */

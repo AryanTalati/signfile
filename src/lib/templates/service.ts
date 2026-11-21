@@ -7,6 +7,7 @@ import { db, schema } from "@/lib/db/client";
 import { FIELD_TYPES, hasNoSigner, type FieldDef, type RoleDef } from "@/lib/fields/types";
 import { matchFields } from "@/lib/pdf/match";
 import { detectFields, snapPlacement } from "@/lib/pdf/detect";
+import { reviewNewAgreement } from "@/lib/ai/run";
 import { DEFAULT_ROLES, rolesFor, validateFields } from "@/lib/fields/validate";
 import { extractLayout } from "@/lib/pdf/extract";
 import { prepareDocument, sha256 } from "@/lib/pdf/prepare";
@@ -100,6 +101,11 @@ async function processUpload(auth: AuthContext, file: { name: string; bytes: Uin
     }
   }
   const detectMs = Date.now() - t0;
+  // AI second opinion (new agreements only; a revision is matched to its previous version).
+  // At most one call; any failure leaves the rules' result as it is.
+  const ai = revision ? null : await reviewNewAgreement(auth, layout, detection.fields, signal);
+  check();
+  const fields = revision?.fields ?? (ai?.status === "ok" ? ai.fields : detection.fields);
 
   const templateId = randomUUID();
   const base = `${auth.company.id}/templates/${templateId}/v1`;
@@ -124,7 +130,7 @@ async function processUpload(auth: AuthContext, file: { name: string; bytes: Uin
       pageCount: prepared.pages.length,
       pages: prepared.pages,
       roles: revision?.roles ?? detection.roles,
-      fields: revision?.fields ?? detection.fields,
+      fields,
       detection: {
         method: "rules",
         outcome: detection.outcome,
@@ -135,6 +141,7 @@ async function processUpload(auth: AuthContext, file: { name: string; bytes: Uin
         detectMs,
         detectedCount: detection.fields.length,
         ...(revision ? { match: revision.match } : {}),
+        ...(ai ? { ai: ai.status === "ok" ? { status: "ok", model: ai.model, summary: ai.summary, terms: ai.terms } : { status: ai.status, reason: ai.reason } } : {}),
       },
       createdById: auth.user.id,
     });
@@ -146,6 +153,13 @@ async function processUpload(auth: AuthContext, file: { name: string; bytes: Uin
       type: "template.created",
       data: { templateId, name, fields: detection.fields.length, outcome: detection.outcome, sourceSha256: prepared.source.sha256 },
     });
+    if (ai?.status === "ok")
+      await tx.insert(schema.events).values({
+        companyId: auth.company.id,
+        actorType: "system",
+        type: "template.ai_reviewed",
+        data: { templateId, model: ai.model, ...ai.summary, termsFound: Object.values(ai.terms).filter((t) => t.found).length },
+      });
   });
   return { templateId, detection };
 }
@@ -224,6 +238,7 @@ export const fieldSchema = z.object({
   source: z.enum(["rule", "manual", "ai", "appended", "acroform"]),
   reason: z.string().max(400).optional(),
   reviewed: z.boolean().optional(),
+  ai: z.object({ suggestion: z.string().max(200), confidence: z.number().min(0).max(1) }).optional(),
 });
 
 export const saveSchema = z.object({
@@ -251,6 +266,20 @@ export async function saveTemplate(auth: AuthContext, templateId: string, input:
   await db.transaction(async (tx) => {
     const parked = input.parkedFields?.filter((f) => f.page <= t.version.pageCount);
     await tx.update(schema.templateVersions).set({ fields, roles, ...(parked ? { parkedFields: parked } : {}) }).where(and(eq(schema.templateVersions.id, t.version.id), eq(schema.templateVersions.companyId, auth.company.id)));
+    // Audit: a person confirmed (or edited) a field the AI review proposed or disputed.
+    const before = new Map(t.version.fields.map((f) => [f.id, f]));
+    for (const f of fields) {
+      const prev = before.get(f.id);
+      if (!f.ai || !f.reviewed || !prev || prev.reviewed) continue;
+      await tx.insert(schema.events).values({
+        companyId: auth.company.id,
+        actorType: "user",
+        actorId: auth.user.id,
+        actorLabel: auth.user.name,
+        type: "template.ai_suggestion_confirmed",
+        data: { templateId, fieldId: f.id, type: f.type, roleKey: f.roleKey, label: f.label, aiSuggested: f.ai.suggestion, changed: prev.type !== f.type || prev.roleKey !== f.roleKey },
+      });
+    }
     await tx
       .update(schema.templates)
       .set({ name: input.name, updatedAt: new Date() })

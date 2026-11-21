@@ -12,6 +12,7 @@ import { EmailStatus } from "@/components/email-status";
 import { FileStatus } from "@/components/files/status";
 import { requireAuth } from "@/lib/auth/session";
 import { getFile, signLink } from "@/lib/files/service";
+import { KeyTerms } from "@/components/files/key-terms";
 import { appUrl } from "@/lib/http/app-url";
 
 export const metadata: Metadata = { title: "File · signfile" };
@@ -142,6 +143,8 @@ export default async function FilePage({ params, searchParams }: { params: Promi
           </div>
         ))}
       </Card>
+
+      {data.keyTerms && <KeyTerms terms={data.keyTerms} />}
 
       {documents.length > 1 && (
         <Card className="p-4" data-testid="versions">

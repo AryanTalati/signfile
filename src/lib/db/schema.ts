@@ -323,6 +323,22 @@ export const events = pgTable(
 );
 
 /** Every email the platform sends, recorded before sending. Shown in-app. */
+/** One AI review call (per-company daily cap + token usage). No agreement text. */
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: id(),
+    companyId: companyId(),
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("reserved"),
+    model: text("model"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ai_usage_company_idx").on(t.companyId, t.createdAt)],
+);
+
 /** One POST to a firm's webhook or Slack URL. `body` is kept so a retry sends the same bytes. */
 export const deliveries = pgTable(
   "deliveries",

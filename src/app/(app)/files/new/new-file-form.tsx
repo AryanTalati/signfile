@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { formatFirmValue, isDateFill } from "@/lib/fields/format";
+import type { TermOffer } from "@/lib/ai/term-offers";
 import { Alert, Button, Card, Field } from "@/components/ui";
 import { createFileAction, type CreateFileState } from "../actions";
 
@@ -11,7 +12,7 @@ export function NewFileForm(props: {
   templates: { id: string; name: string }[];
   templateId: string;
   problems: string[];
-  firmFill: { key: string; label: string; required: boolean }[];
+  firmFill: { key: string; label: string; required: boolean; offer: TermOffer | null }[];
   countersign: boolean;
   firmFirst: boolean;
   mySavedSignature: string | null;
@@ -79,13 +80,9 @@ export function NewFileForm(props: {
             <h2 className="font-semibold">Filled by you</h2>
             <p className="text-sm text-muted">These go into the agreement before it&apos;s sent. The client sees them but can&apos;t change them.</p>
           </div>
-          {props.firmFill.map((f) =>
-            isDateFill(f) ? (
-              <DateFill key={f.key} label={f.label + (f.required ? "" : " (optional)")} name={`firm:${f.key}`} initial={v[`firm:${f.key}`]} error={fe[`firm:${f.key}`]} />
-            ) : (
-              <Field key={f.key} label={f.label + (f.required ? "" : " (optional)")} name={`firm:${f.key}`} autoComplete="off" defaultValue={v[`firm:${f.key}`]} error={fe[`firm:${f.key}`]} />
-            ),
-          )}
+          {props.firmFill.map((f) => (
+            <FirmFillField key={f.key} f={f} isDate={isDateFill(f)} initial={v[`firm:${f.key}`]} error={fe[`firm:${f.key}`]} />
+          ))}
         </Card>
       )}
 
@@ -155,12 +152,13 @@ function localToday() {
 }
 
 /** A date picker for a firm-filled date (Effective Date…): defaults to today, stamped as "November 20, 2026". */
-function DateFill(p: { label: string; name: string; initial?: string; error?: string }) {
-  const [value, setValue] = useState(p.initial ?? "");
+function DateFill(p: { label: string; name: string; initial?: string; error?: string; value: string; onValue: (v: string) => void }) {
+  const { value, onValue: setValue } = p;
   // Set after mount: the server doesn't know the sender's date (and must not cache a stale one).
   useEffect(() => {
     if (!p.initial) setValue(localToday());
-  }, [p.initial]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, []);
   return (
     <Field
       label={p.label}
@@ -173,5 +171,34 @@ function DateFill(p: { label: string; name: string; initial?: string; error?: st
       hint={value ? `Appears in the agreement as ${formatFirmValue(value)}.` : undefined}
       data-testid="date-fill"
     />
+  );
+}
+
+/**
+ * A "Filled by you" field. If the AI review found a matching key term, it's offered with its
+ * source quote; the firm accepts it with one click (never filled in automatically).
+ */
+function FirmFillField(p: { f: { key: string; label: string; required: boolean; offer: TermOffer | null }; isDate: boolean; initial?: string; error?: string }) {
+  const label = p.f.label + (p.f.required ? "" : " (optional)");
+  const name = `firm:${p.f.key}`;
+  const [value, setValue] = useState(p.initial ?? "");
+  const offer = p.f.offer;
+  const offerUi = offer && value !== offer.fill && (
+    <div className="-mt-2 rounded-md bg-violet-50 px-3 py-2 text-xs text-violet-900" data-testid="term-offer">
+      From the agreement{offer.page ? ` (p.${offer.page})` : ""}: “{offer.quote}”{" "}
+      <button type="button" className="ml-1 font-medium underline" onClick={() => setValue(offer.fill)} data-testid="use-term">
+        Use {offer.value}
+      </button>
+    </div>
+  );
+  return (
+    <>
+      {p.isDate ? (
+        <DateFill label={label} name={name} initial={p.initial} error={p.error} value={value} onValue={setValue} />
+      ) : (
+        <Field label={label} name={name} autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} error={p.error} />
+      )}
+      {offerUi}
+    </>
   );
 }

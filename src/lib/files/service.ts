@@ -1,4 +1,5 @@
 import "server-only";
+import type { Terms } from "@/lib/ai/review";
 import { emit } from "@/lib/integrations/dispatch";
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
@@ -174,7 +175,15 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
       companyId: auth.company.id,
       fileId,
       type: "file.created",
-      data: { template: t.template.name, templateVersion: v.version, clientLegalName: input.clientLegalName, reference: input.reference || null, draft: !input.sendNow },
+      data: {
+        template: t.template.name,
+        templateVersion: v.version,
+        clientLegalName: input.clientLegalName,
+        reference: input.reference || null,
+        draft: !input.sendNow,
+        // Fields the AI review proposed or disputed, each confirmed by a person before this File.
+        aiConfirmedFields: v.fields.filter((f) => f.ai && f.reviewed).length,
+      },
     });
     if (input.sendNow) await dispatch(tx, auth, fileId, baseUrl, { skipFirmEmail: signNow });
   });
@@ -329,5 +338,14 @@ export async function getFile(auth: AuthContext, fileId: string) {
       ? db.select({ name: schema.templates.name }).from(schema.templates).where(and(eq(schema.templates.id, file.templateId), eq(schema.templates.companyId, auth.company.id)))
       : Promise.resolve([]),
   ]);
-  return { file, recipients, events, emails, documents, templateName: template[0]?.name ?? "Agreement" };
+  // Key terms from the AI review of the template version this File's current document came from.
+  const current = documents.find((d) => d.id === file.currentDocumentId);
+  const [tv] = current?.templateVersionId
+    ? await db
+        .select({ detection: schema.templateVersions.detection })
+        .from(schema.templateVersions)
+        .where(and(eq(schema.templateVersions.id, current.templateVersionId), eq(schema.templateVersions.companyId, auth.company.id)))
+    : [];
+  const ai = (tv?.detection as { ai?: { status?: string; terms?: Terms } } | null)?.ai;
+  return { file, recipients, events, emails, documents, templateName: template[0]?.name ?? "Agreement", keyTerms: ai?.status === "ok" && ai.terms ? ai.terms : null };
 }

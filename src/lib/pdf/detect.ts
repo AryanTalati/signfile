@@ -1022,3 +1022,32 @@ export function snapPlacement(page: PageLayout | undefined, f: { x: number; y: n
   const covers = geo.ink.some((g) => xOverlap(g.x, g.x2, x1, x2) > 0.5 && xOverlap(g.y, g.baseline, y1, y2) > 0.5);
   return covers ? out(fitBox(geo, x1, x2 - x1, y2 - y1, y2 + 1), false) : null;
 }
+
+/** Every blank on a page as the geometry pass sees it (labeled or not), in displayed points. */
+export interface PageBlank {
+  page: number;
+  x1: number;
+  x2: number;
+  bottom: number;
+  kind: string;
+  /** The printed label next to it, if any ("Date signed:"). */
+  label: string | null;
+}
+
+/** All blanks on a page, the same way detection finds them (for an AI second opinion). */
+export function listBlanks(page: PageLayout): PageBlank[] {
+  const phrases = buildPhrases(page);
+  const geo = pageGeo(page);
+  const text = textBlanks(phrases, page.items);
+  snapToRuns(text, geo);
+  const lines = lineBlanks(page, phrases).filter((l) => !text.some((t) => Math.abs(t.bottom - l.bottom) < 6 && xOverlap(t.x1, t.x2, l.x1, l.x2) > 0.5 * (l.x2 - l.x1)));
+  const boxes = boxBlanks(page, phrases);
+  const all = [...text, ...lines, ...boxes];
+  attachLabels(all, phrases);
+  return all.map((b) => ({ page: page.page, x1: b.x1, x2: b.x2, bottom: b.bottom, kind: b.kind, label: b.label?.text ?? null }));
+}
+
+/** A field box on a blank, sized as detection would size it, never over printed text. Fractions of the page. */
+export function boxForBlank(page: PageLayout, b: PageBlank, type: FieldType) {
+  return snapPlacement(page, { x: b.x1 / page.width, y: (b.bottom - 14) / page.height, w: Math.max(b.x2 - b.x1, 20) / page.width, h: 14 / page.height, type });
+}

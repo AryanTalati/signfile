@@ -545,10 +545,15 @@ export function FieldEditor(props: EditorProps) {
             <p className="mt-1 text-xs text-muted">We weren&apos;t sure about these. Move or edit them, or confirm they&apos;re right.</p>
             <ul className="mt-2 divide-y divide-border">
               {flagged.map((f) => (
-                <li key={f.id} className="flex items-center gap-2 py-2 text-sm">
+                <li key={f.id} className="flex items-center gap-2 py-2 text-sm" data-testid="flagged-item" data-ai={f.ai ? "true" : "false"}>
                   <button type="button" onClick={() => scrollTo(f)} className="min-w-0 flex-1 text-left hover:underline" title={f.reason}>
                     <span className="font-medium">{f.label}</span> <span className="text-muted">· p{f.page} · {f.roleKey ?? "you"}</span>
-                    <span className="block text-xs text-amber-700">{Math.round(f.confidence * 100)}% sure</span>
+                    {f.ai && (
+                      <span className="ml-1 rounded bg-violet-100 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-violet-800" data-testid="ai-suggested">
+                        AI-suggested
+                      </span>
+                    )}
+                    <span className="block text-xs text-amber-700">{f.ai ? `AI suggests: ${f.ai.suggestion}` : `${Math.round(f.confidence * 100)}% sure`}</span>
                   </button>
                   <button type="button" onClick={() => update(f.id, { reviewed: true })} className="shrink-0 rounded-md border border-border px-2 py-1 text-xs hover:bg-neutral-50">
                     Looks right
@@ -768,6 +773,11 @@ function Inspector({
         <input type="checkbox" checked={f.required} onChange={(e) => onChange({ required: e.target.checked })} /> Required
       </label>
 
+      {f.ai && !f.reviewed && (
+        <p className="mt-3 rounded-md bg-violet-50 px-2 py-1.5 text-xs text-violet-900" data-testid="ai-note">
+          <span className="font-semibold">AI-suggested.</span> AI suggests: {f.ai.suggestion}. The rules&apos; answer is shown; check it, change it if needed, then press Looks right.
+        </p>
+      )}
       {f.source !== "manual" && (
         <p className="mt-3 text-xs text-muted" data-testid="field-confidence">
           {f.source === "appended" ? "Added with the signature page." : `Detected · ${Math.round(f.confidence * 100)}% sure${f.reviewed ? " · checked" : ""}`}
