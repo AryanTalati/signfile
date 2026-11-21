@@ -50,11 +50,11 @@ test("unchecking 'Firm signs too' keeps the firm's fields; re-checking restores 
   const firmToggle = page.getByRole("checkbox", { name: "Firm signs too" });
   await firmToggle.uncheck();
   await expect(page.locator('[data-testid="field"][data-role="firm"]')).toHaveCount(0);
-  await expect(page.getByTestId("firm-count")).toHaveText("off (5 fields kept)");
+  await expect(page.getByTestId("firm-count")).toHaveText("off (fields kept)");
   await saved(page);
   await page.reload(); // kept on the server, not just in the page
   await expect(page.getByTestId("field")).toHaveCount(5);
-  await expect(page.getByTestId("firm-count")).toHaveText("off (5 fields kept)");
+  await expect(page.getByTestId("firm-count")).toHaveText("off (fields kept)");
 
   await firmToggle.check();
   await expect(page.getByTestId("field")).toHaveCount(10);
@@ -153,4 +153,21 @@ test("high-confidence fields are accepted silently; a low-confidence one shows o
   await expect(page.getByTestId("inspector").getByTestId("confirm-note")).toHaveText("Please confirm this field.");
   expect(await page.locator("main").innerText()).not.toMatch(DEBUG);
   expect(await allTitles(page)).not.toMatch(DEBUG);
+});
+
+test("flagged fields: the status area has no counts, just plain wording and each field's own Confirm tag", async ({ page }) => {
+  await signupFresh(page, "E2E Editor Co");
+  await uploadAgreement(page, SAAS); // two Company fields need confirming
+  await expect(page.getByTestId("confirm-mark")).toHaveCount(2);
+  await expect(page.getByTestId("ready")).toHaveText("✓ Ready to send");
+  await expect(page.getByTestId("review-list").getByRole("heading")).toHaveText("Check the highlighted fields before sending");
+  const COUNT = /\b\d+\s*(fields?|to review|to confirm|for you|need)/i;
+  const status = [
+    await page.getByTestId("review-list").getByRole("heading").innerText(),
+    await page.getByRole("status").first().innerText().catch(() => ""), // upload banner
+    await page.getByTestId("ready").innerText(),
+    await page.getByTestId("firm-count").innerText(),
+  ].join(" | ");
+  expect(status).not.toMatch(/\d/);
+  expect(await page.locator("main").innerText()).not.toMatch(COUNT);
 });

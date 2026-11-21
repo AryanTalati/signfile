@@ -30,7 +30,6 @@ export default async function RevisePage({ params, searchParams }: { params: Pro
   // Pre-fill "What changed?" with the signer's change request (or decline reason).
   const asked = data.recipients.find((r) => r.documentId === data.file.currentDocumentId && (r.changeComment || r.declineReason));
   const prefill = asked?.changeComment ?? asked?.declineReason ?? "";
-  const s = match?.summary;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-5">
@@ -44,15 +43,10 @@ export default async function RevisePage({ params, searchParams }: { params: Pro
 
       <Card className="p-4" data-testid="match-summary">
         {match?.clean ? (
-          <p className="font-medium text-green-800">
-            {s?.matched} of {s?.previous} fields matched. Nothing to review.
-          </p>
+          <p className="font-medium text-green-800">All fields matched. Nothing to review.</p>
         ) : (
           <>
-            <p className="font-medium">
-              {s?.matched} of {s?.previous} fields matched.{" "}
-              {toReview.length ? `${toReview.length} field${toReview.length > 1 ? "s" : ""} need${toReview.length > 1 ? "" : "s"} a look.` : "All flagged fields reviewed."}
-            </p>
+            <p className="font-medium" data-testid="match-status">{toReview.length ? "Check the highlighted fields before sending." : "All flagged fields reviewed."}</p>
             <ul className="mt-2 space-y-1 text-sm" data-testid="flagged-fields">
               {toReview.map((f) => (
                 <li key={f.id} data-testid="flagged-field">
@@ -73,7 +67,7 @@ export default async function RevisePage({ params, searchParams }: { params: Pro
             </ul>
             {toReview.length > 0 && (
               <Link href={`/templates/${t.template.id}?focus=1`} className="mt-3 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white" data-testid="review-flagged">
-                Review {toReview.length === 1 ? "this field" : `these ${toReview.length} fields`}
+                Review the highlighted fields
               </Link>
             )}
           </>

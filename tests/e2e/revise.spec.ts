@@ -113,7 +113,7 @@ test("unchanged fields: nothing to review, one click to send; 'What changed?' pr
   await expect(c.getByTestId("sign-responded-changes_requested")).toBeVisible();
 
   await uploadRevision(page, fileUrl);
-  await expect(page.getByTestId("match-summary")).toContainText("8 of 8 fields matched. Nothing to review.");
+  await expect(page.getByTestId("match-summary")).toContainText("All fields matched. Nothing to review.");
   await expect(page.getByTestId("flagged-field")).toHaveCount(0);
   await expect(page.getByTestId("review-all")).toBeVisible();
   await expect(page.getByTestId("what-changed")).toHaveValue("Fix the typo in clause 3.");
@@ -139,7 +139,7 @@ test("moved and added fields: moved ones match, only the new field is flagged fo
   await expect(c.getByTestId("sign-responded-changes_requested")).toBeVisible();
 
   await uploadRevision(page, fileUrl, "fixtures/agreements/pdf-two-column-revised.pdf");
-  await expect(page.getByTestId("match-summary")).toContainText("8 of 8 fields matched. 1 field needs a look.");
+  await expect(page.getByTestId("match-summary")).toContainText("Check the highlighted fields before sending.");
   await expect(page.getByTestId("flagged-field")).toHaveCount(1);
   await expect(page.getByTestId("flagged-field")).toContainText("Initials");
   await expect(page.getByTestId("flagged-field")).toContainText("new in this version");

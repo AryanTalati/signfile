@@ -335,9 +335,8 @@ export function FieldEditor(props: EditorProps) {
   }
 
   async function removePage() {
-    const onPage = fields.filter((f) => f.source === "appended" || f.page === props.pages.length).length;
     const ok = window.confirm(
-      `Remove the added signature page?\n\nThe page and the ${onPage} field${onPage === 1 ? "" : "s"} on it will be removed. Your other fields stay as they are.`,
+      "Remove the added signature page?\n\nThe page and the fields on it will be removed. Your other fields stay as they are.",
     );
     if (!ok) return;
     setAppending(true);
@@ -362,7 +361,6 @@ export function FieldEditor(props: EditorProps) {
   const sel = fields.find((f) => f.id === selected) ?? null;
   const focus = props.focusIds ? new Set(props.focusIds) : null;
   const flagged = fields.filter(needsReview);
-  const counts = { client: fields.filter((f) => f.roleKey === "client").length, firm: fields.filter((f) => f.roleKey === "firm").length };
   const noFields = fields.length === 0;
 
   return (
@@ -406,7 +404,7 @@ export function FieldEditor(props: EditorProps) {
         {focus && (
           <div className="mb-3">
             <Alert tone="info">
-              Showing only the {focus.size} field{focus.size === 1 ? "" : "s"} that changed. Move or edit {focus.size === 1 ? "it" : "them"}, or press &quot;Looks right&quot;.{" "}
+              Showing only the fields that changed. Move or edit them, or press &quot;Looks right&quot;.{" "}
               <a className="underline" href={`/templates/${props.templateId}`}>
                 Show all fields
               </a>
@@ -416,13 +414,7 @@ export function FieldEditor(props: EditorProps) {
         {props.isNew && !noFields && (
           <div className="mb-3">
             <Alert tone="info">
-              We found <strong>{fields.length}</strong> field{fields.length === 1 ? "" : "s"}
-              {flagged.length ? (
-                <>
-                  , <strong>{flagged.length}</strong> for you to confirm
-                </>
-              ) : null}
-              . Drag to move, drag the corner to resize, click a field to change its type or signer.
+              We found the signature fields{flagged.length ? ". Check the highlighted ones before sending" : ""}. Drag to move, drag the corner to resize, click a field to change its type or signer.
             </Alert>
           </div>
         )}
@@ -510,11 +502,11 @@ export function FieldEditor(props: EditorProps) {
           <h2 className="text-sm font-semibold">Signers</h2>
           <ul className="mt-2 space-y-1.5 text-sm">
             <li className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-blue-600" /> Client <span className="ml-auto text-muted">{counts.client} fields</span>
+              <span className="h-2.5 w-2.5 rounded-full bg-blue-600" /> Client
             </li>
             <li className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${countersign ? "bg-violet-600" : "bg-neutral-300"}`} /> {props.firmName} countersigns
-              <span className="ml-auto text-muted" data-testid="firm-count">{firmBusy ? "finding fields…" : countersign ? `${counts.firm} fields` : parked.length ? `off (${parked.length} fields kept)` : "off"}</span>
+              <span className="ml-auto text-muted" data-testid="firm-count">{firmBusy ? "finding fields…" : countersign ? "on" : parked.length ? "off (fields kept)" : "off"}</span>
             </li>
           </ul>
           <label className="mt-3 flex items-center gap-2 text-sm">
@@ -540,7 +532,7 @@ export function FieldEditor(props: EditorProps) {
         {flagged.length > 0 && (
           <Card className="p-4" data-testid="review-list">
             <h2 className="text-sm font-semibold">
-              Confirm {flagged.length} field{flagged.length > 1 ? "s" : ""}
+              Check the highlighted fields before sending
             </h2>
             <p className="mt-1 text-xs text-muted">Move or edit them if needed, or confirm they&apos;re right.</p>
             <ul className="mt-2 divide-y divide-border">
