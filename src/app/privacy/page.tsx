@@ -18,7 +18,7 @@ export default function PrivacyPage() {
       <h2 className="text-lg font-semibold">What we store</h2>
       <ul className="list-disc space-y-1 pl-5">
         <li>Uploaded documents and the signed PDFs produced from them.</li>
-        <li>Account details (name, email, title) and, for each signer: name, email, title, signature image, IP address, browser, and the times they viewed, agreed to sign and signed. This is the audit trail that makes an electronic signature verifiable.</li>
+        <li>Account details (name, email, title) and, for each signer: name, email, title, signature image, IP address, device (browser and operating system), and the times they viewed, agreed to sign and signed. This is the audit trail that makes an electronic signature verifiable; signers are told it&apos;s recorded before they agree to sign.</li>
         <li>Copies of the emails SignFile sends.</li>
       </ul>
       <p>This data is stored only to run the demo. It isn&apos;t sold or shared, and it isn&apos;t used to train AI models.</p>

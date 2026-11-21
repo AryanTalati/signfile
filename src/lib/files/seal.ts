@@ -1,6 +1,6 @@
 import "server-only";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { PDFDocument, PDFFont, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { db, schema } from "@/lib/db/client";
 import { recordEmail } from "@/lib/email/outbox";
 import { sha256 } from "@/lib/pdf/prepare";
@@ -8,8 +8,8 @@ import { deleteObjects, getObject, putObject } from "@/lib/storage";
 import { formatFirmValue, formatSignedDate } from "@/lib/fields/format";
 import { signedTitle } from "@/lib/fields/signer-details";
 import { stampAll } from "@/lib/pdf/stamp";
-import { utcAndLocal, validTimeZone } from "@/lib/time";
-import { eventLabel } from "./event-labels";
+import { validTimeZone } from "@/lib/time";
+import { appendCertificate } from "@/lib/pdf/certificate";
 
 /**
  * Sealing: stamp every value onto the agreement, append the audit certificate,
@@ -95,7 +95,6 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
         userAgent: s.userAgent,
         timezone: s.timezone,
         consentAt: s.consentAt,
-        viewedAt: s.viewedAt,
         signedAt: s.signedAt,
         signature: Object.entries(s.values ?? {}).find(([k, val]) => typeof val === "string" && val.startsWith("data:image/png") && doc.fields.find((x) => x.id === k)?.type === "signature")?.[1] as string | undefined,
       })),
@@ -124,158 +123,6 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
       return { finalSha256, alreadySealed: false };
     });
   }
-}
-
-// ---------- certificate ----------
-
-interface CertSigner {
-  name: string;
-  email: string;
-  title: string | null;
-  role: string;
-  ip: string | null;
-  userAgent: string | null;
-  timezone: string | null;
-  consentAt: Date | null;
-  viewedAt: Date | null;
-  signedAt: Date | null;
-  /** Set for an automatic countersign: when the signer authorized it. */
-  autoAuthorizedAt: Date | null;
-  signature?: string;
-}
-
-/** UTC first, then local time in `tz` ("2026-11-20 23:19:37 UTC / Nov 20, 2026, 4:19:37 PM MST"). */
-const when = (d: Date | null, tz: string | null) => (d ? utcAndLocal(d, tz) : "-");
-
-async function appendCertificate(
-  pdf: PDFDocument,
-  c: {
-    font: PDFFont;
-    bold: PDFFont;
-    fileId: string;
-    documentName: string;
-    firm: string;
-    client: string;
-    reference: string | null;
-    completedAt: Date;
-    /** Shown next to UTC for the completion time, the event log and signers without their own zone. */
-    firmTimezone: string | null;
-    sourceSha256: string;
-    documentSha256: string;
-    documentVersion: number;
-    verifyUrl: string;
-    signers: CertSigner[];
-    events: { at: Date; type: string; actor: string; ip: string | null; data: Record<string, unknown> }[];
-  },
-) {
-  const W = 612, H = 792, M = 54;
-  let page = pdf.addPage([W, H]);
-  let y = H - M;
-  const grey = rgb(0.38, 0.38, 0.38);
-  const newPage = () => {
-    page = pdf.addPage([W, H]);
-    y = H - M;
-  };
-  const ensure = (h: number) => {
-    if (y - h < M) newPage();
-  };
-  const text = (s: string, x: number, size = 9, f = c.font, color = rgb(0, 0, 0)) => page.drawText(s, { x, y: y - size, size, font: f, color });
-  const row = (label: string, value: string) => {
-    for (const [i, line] of wrapText(value, c.font, 9, W - 2 * M - 150).entries()) {
-      ensure(13);
-      if (i === 0) text(label, M, 9, c.bold, grey);
-      text(line, M + 150, 9);
-      y -= 13;
-    }
-  };
-
-  text("Certificate of Completion", M, 18, c.bold);
-  y -= 26;
-  text("This certificate is part of the signed document above. It records who signed, when, and how.", M, 9, c.font, grey);
-  y -= 22;
-  row("File ID", c.fileId);
-  row("Document", `${c.documentName} (version ${c.documentVersion})`);
-  row("Between", `${c.firm} and ${c.client}`);
-  if (c.reference) row("Reference", c.reference);
-  row("Status", `Completed ${when(c.completedAt, c.firmTimezone)}`);
-  row("Source file SHA-256", c.sourceSha256);
-  row("Agreement PDF SHA-256", c.documentSha256);
-  row("Signed PDF SHA-256", `Recorded when sealed; check this file at ${c.verifyUrl}`);
-  y -= 8;
-
-  for (const s of c.signers) {
-    ensure(150);
-    page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
-    y -= 14;
-    text(s.name, M, 11, c.bold);
-    y -= 15;
-    row("Role", s.role);
-    row("Email", s.email);
-    if (s.title) row("Title", s.title);
-    // Each signer's own browser time zone; the firm's for signers without one.
-    const tz = s.timezone ?? c.firmTimezone;
-    if (s.autoAuthorizedAt) {
-      // Signed by the system on their standing instruction: say so, and show where and when they gave it.
-      const at = s.autoAuthorizedAt;
-      row("Method", "Automatic countersign using saved signature");
-      row("Authorized", [when(at, tz), `IP ${s.ip ?? "not recorded"}`, `browser ${(s.userAgent ?? "not recorded").slice(0, 200)}`].join(", "));
-      row("Agreed to e-sign", when(at, tz));
-      row("Signed", when(s.signedAt, tz));
-      if (tz) row("Time zone", `${tz} (${c.firm}'s time zone)`);
-    } else {
-      row("Agreed to e-sign", when(s.consentAt, tz));
-      row("Signed", when(s.signedAt, tz));
-      if (tz) row("Time zone", s.timezone ? `${s.timezone} (their browser at signing)` : `${tz} (${c.firm}'s time zone)`);
-      row("IP address", s.ip ?? "not recorded");
-      row("Browser", (s.userAgent ?? "not recorded").slice(0, 220));
-    }
-    if (s.signature) {
-      const img = await pdf.embedPng(Buffer.from(s.signature.split(",")[1], "base64"));
-      const scale = Math.min(180 / img.width, 36 / img.height);
-      ensure(44);
-      text("Signature", M, 9, c.bold, grey);
-      page.drawImage(img, { x: M + 150, y: y - img.height * scale, width: img.width * scale, height: img.height * scale });
-      y -= Math.max(img.height * scale, 12) + 8;
-    }
-    y -= 6;
-  }
-
-  ensure(40);
-  y -= 6;
-  text(c.firmTimezone ? `Event log (UTC / ${c.firmTimezone})` : "Event log (UTC)", M, 11, c.bold);
-  y -= 18;
-  for (const e of c.events) {
-    // The revision note can quote the earlier version's change request: it stays in the audit
-    // trail and timeline, but the certificate describes only the signed version.
-    const data = e.type === "file.revised" ? { ...e.data, note: null } : e.data;
-    const line = `${when(e.at, c.firmTimezone)}  ${eventLabel({ type: e.type, actorLabel: e.actor, data })}${e.ip ? `  ·  IP ${e.ip}` : ""}`;
-    for (const l of wrapText(line, c.font, 8, W - 2 * M)) {
-      ensure(11);
-      text(l, M, 8);
-      y -= 11;
-    }
-  }
-}
-
-function wrapText(s: string, font: PDFFont, size: number, max: number): string[] {
-  const out: string[] = [];
-  let line = "";
-  for (const word of s.split(" ")) {
-    const next = line ? `${line} ${word}` : word;
-    if (font.widthOfTextAtSize(next, size) > max && line) {
-      out.push(line);
-      line = word;
-    } else line = next;
-    // Hard-break very long tokens (hashes, user agents).
-    while (font.widthOfTextAtSize(line, size) > max) {
-      let i = line.length;
-      while (i > 1 && font.widthOfTextAtSize(line.slice(0, i), size) > max) i--;
-      out.push(line.slice(0, i));
-      line = line.slice(i);
-    }
-  }
-  if (line) out.push(line);
-  return out;
 }
 
 // ---------- signed-copy emails ----------

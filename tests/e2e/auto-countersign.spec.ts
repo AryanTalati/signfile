@@ -49,7 +49,8 @@ test("auto-countersign: off by default; when on, the firm's saved signature is a
   expect(text).toMatch(/Countersigned automatically with Test Admin's saved signature/);
   // The signer block says how it was signed, and when/where it was authorized (no raw ISO in a "Browser" row).
   expect(text).toContain("Method Automatic countersign using saved signature");
-  const authorized = /Authorized (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC) \/ [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d\d:\d\d [AP]M MST, IP [^,]+, browser Mozilla/.exec(text);
+  const authorized = /Authorized (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC) \/ [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d\d:\d\d [AP]M MST, IP [^,]+, browser (Chrome|Edge|Firefox|Safari) \d+ on (Windows|macOS|Linux)/.exec(text);
+  expect(text).not.toContain("Mozilla/5.0"); // short browser summary; the full string stays in the audit record
   expect(authorized, "Authorized row").toBeTruthy();
   expect(text).not.toMatch(/Automatic countersign authorized \d{4}-/);
   // "Agreed to e-sign" is the authorization time, not the signing time.

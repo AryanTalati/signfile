@@ -163,6 +163,12 @@ export function Signer(p: Props) {
             <div className="mt-4 rounded-lg bg-neutral-50 p-3 text-sm text-neutral-700">
               <p className="font-medium">Electronic signature consent</p>
               <p className="mt-1">{p.consentText}</p>
+              <p className="mt-2 text-xs text-neutral-600" data-testid="audit-notice">
+                For the audit trail, we record your IP address, device (browser and operating system) and the time of each step (viewing, agreeing and signing).{" "}
+                <a href="/privacy" className="underline" target="_blank" rel="noreferrer">
+                  Privacy
+                </a>
+              </p>
             </div>
             {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
             {p.quick?.savedSignature && (
