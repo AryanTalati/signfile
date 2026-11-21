@@ -8,7 +8,7 @@
  * (page count, text layer present/absent, rotation, encryption) so a fixture
  * can't silently stop testing what it claims to.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { docxDotLeaders, docxFilledDate, docxTableBlocks } from "./docx-fixtures";
@@ -23,6 +23,7 @@ import {
   pdfMultipageInitials,
   pdfNoSignatureArea,
   pdfRotated,
+  pdfSaasTable,
   pdfScanSource,
   pdfTwoColumn,
 } from "./pdf-fixtures";
@@ -59,6 +60,20 @@ const ASTRA = "Astra AI";
 type Gen = { exp: Omit<FixtureExpectation, "check">; make: () => Promise<Uint8Array | Buffer> };
 
 const fixtures: Gen[] = [
+  {
+    exp: {
+      file: "pdf-saas-table.pdf", format: "pdf", firmName: "Cloudly Test Software Inc.", clientName: "Northwind Analytics LLC",
+      description: "SaaS agreement with a bordered VENDOR | CUSTOMER signature table: drawn underlines after the vendor's labels, underscore text in the customer's cells.",
+      outcome: "fields",
+      blocks: [
+        { role: "firm", page: "last", types: ["signature", "full_name", "title", "date_signed", "company"] },
+        { role: "client", page: "last", types: ["signature", "full_name", "title", "date_signed", "company"] },
+      ],
+      signatures: [{ role: "firm", page: "last" }, { role: "client", page: "last" }],
+      traps: ["'Date signed:' contains 'signed' but is a date", "'Authorized signatory' is the signature line", "'Name (print)' / 'Position' are name / title", "'Customer legal name' / 'Company' are company fields"],
+    },
+    make: () => pdfSaasTable("Cloudly Test Software Inc.", "Northwind Analytics LLC"),
+  },
   {
     exp: {
       file: "pdf-two-column-revised.pdf", format: "pdf", firmName: "Northwind Example Labs", clientName: "Hooli Test Systems",
@@ -296,7 +311,15 @@ async function main() {
   const manifest: FixtureExpectation[] = [];
   const problems: string[] = [];
 
+  // ONLY=<file>: (re)generate just that fixture and merge its entry into the existing manifest.
+  const only = process.env.ONLY;
+  const existing: FixtureExpectation[] = only ? JSON.parse(readFileSync(path.join(OUT, "manifest.json"), "utf8")) : [];
   for (const { exp, make } of fixtures) {
+    if (only && exp.file !== only) {
+      const prev = existing.find((e) => e.file === exp.file);
+      if (prev) manifest.push(prev);
+      continue;
+    }
     const bytes = await make();
     writeFileSync(path.join(OUT, exp.file), bytes);
     const sizeKb = Math.round(bytes.length / 1024);

@@ -1,5 +1,62 @@
 [
   {
+    "file": "pdf-saas-table.pdf",
+    "format": "pdf",
+    "firmName": "Cloudly Test Software Inc.",
+    "clientName": "Northwind Analytics LLC",
+    "description": "SaaS agreement with a bordered VENDOR | CUSTOMER signature table: drawn underlines after the vendor's labels, underscore text in the customer's cells.",
+    "outcome": "fields",
+    "blocks": [
+      {
+        "role": "firm",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed",
+          "company"
+        ]
+      },
+      {
+        "role": "client",
+        "page": "last",
+        "types": [
+          "signature",
+          "full_name",
+          "title",
+          "date_signed",
+          "company"
+        ]
+      }
+    ],
+    "signatures": [
+      {
+        "role": "firm",
+        "page": "last"
+      },
+      {
+        "role": "client",
+        "page": "last"
+      }
+    ],
+    "traps": [
+      "'Date signed:' contains 'signed' but is a date",
+      "'Authorized signatory' is the signature line",
+      "'Name (print)' / 'Position' are name / title",
+      "'Customer legal name' / 'Company' are company fields"
+    ],
+    "check": {
+      "pages": 2,
+      "textChars": 2842,
+      "rotations": [
+        0,
+        0
+      ],
+      "sizeKb": 4
+    }
+  },
+  {
     "file": "pdf-two-column-revised.pdf",
     "format": "pdf",
     "firmName": "Northwind Example Labs",

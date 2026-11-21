@@ -334,3 +334,46 @@ export async function pdfCompactBlocks(firm: string, client: string) {
   }
   return w.doc.save();
 }
+
+/**
+ * SaaS agreement with a bordered VENDOR | CUSTOMER signature table. The vendor column uses a
+ * drawn underline after each label inside its cell; the customer column uses underscore text.
+ * Labels include "Date signed:" (must be a date, not a signature), "Authorized signatory:",
+ * "Name (print):", "Position:", and company lines ("Company:", "Customer legal name:").
+ */
+export async function pdfSaasTable(firm: string, client: string) {
+  const w = await Writer.create();
+  intro(w, "SOFTWARE AS A SERVICE AGREEMENT", firm, client, "Vendor", "Customer");
+  clauses(w, 5);
+  w.ensure(300);
+  w.gap(16);
+  w.para("Each party has caused this Agreement to be signed by its authorized representative.", { after: 18 });
+  const left = w.margin, mid = w.margin + w.width / 2, right = w.margin + w.width;
+  const rowH = 34, headH = 34;
+  const vendor = ["Authorized signatory:", "Name (print):", "Position:", "Date signed:", "Company:"];
+  const customer = ["Signature:", "Name (print):", "Position:", "Date signed:", "Customer legal name:"];
+  const top = w.y;
+  const bottom = top - headH - rowH * vendor.length;
+  // Table borders: outer box, middle divider, row lines.
+  w.rect(left, bottom, right - left, top - bottom);
+  w.line(mid, top, mid, bottom);
+  for (let i = 0; i <= vendor.length; i++) w.line(left, top - headH - rowH * i, right, top - headH - rowH * i);
+  w.text("VENDOR", left + 6, top - 14, { bold: true, size: 10 });
+  w.text(firm, left + 6, top - 27, { size: 9 });
+  w.text("CUSTOMER", mid + 6, top - 14, { bold: true, size: 10 });
+  w.text(client, mid + 6, top - 27, { size: 9 });
+  vendor.forEach((label, i) => {
+    const base = top - headH - rowH * i - rowH + 10;
+    w.text(label, left + 6, base, { size: 9 });
+    const x1 = left + 6 + w.font.widthOfTextAtSize(label, 9) + 6;
+    w.line(x1, base - 1, mid - 8, base - 1, 0.6);
+  });
+  customer.forEach((label, i) => {
+    const base = top - headH - rowH * i - rowH + 10;
+    const room = right - 8 - (mid + 6 + w.font.widthOfTextAtSize(label + " ", 9));
+    const n = Math.max(6, Math.floor(room / w.font.widthOfTextAtSize("_", 9)));
+    w.text(`${label} ${"_".repeat(n)}`, mid + 6, base, { size: 9 });
+  });
+  w.y = bottom - 20;
+  return w.doc.save();
+}

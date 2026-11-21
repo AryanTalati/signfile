@@ -100,13 +100,17 @@ const LABEL_RULES: [RegExp, LabelKind, number][] = [
   [/\bsignature (page|block|section)s?\b|^execution( page)?:?$/i, "heading", 0],
   [/\binitials\b|^initial(s| here)?$/i, "initials", 0.95],
   [/\bname\s*(and|&|\/)\s*title\b/i, "name_title", 0.8],
-  [/\b(signature|sign here|signed|signatory|e-?signature)\b/i, "signature", 0.95],
+  // Dates before signatures: "Date signed", "Signed on", "Date of signature" are dates, never signatures.
+  [/^(date|dated|date signed|signed date|signature date|date of signature|date of execution|signing date|signed on|date signed on|executed on)$/i, "date", 0.85],
+  // Word boundaries. "signed" alone never makes a signature ("Date signed" is a date); the one
+  // exception is a label that starts "Signed for …" / "Signed by …" ("Signed for the Client: ____").
+  [/\b(signature|sign here|signatory|e-?signature)\b/i, "signature", 0.95],
+  [/^signed\s+(for|by)\b/i, "signature", 0.9],
   [/^by$/i, "signature", 0.9],
   [/^(director|authori[sz]ed (representative|signer|officer))$/i, "signature", 0.75],
   [/^(print(ed)?\s*name|full\s*name|name|name of signatory|signer'?s? name)$/i, "full_name", 0.9],
   [/^(title|position|designation|its|capacity|job title|role)$/i, "title", 0.85],
-  [/^(date|dated|date signed|signed date|signature date|date of signature|signing date)$/i, "date", 0.85],
-  [/^(company|company name|organi[sz]ation|entity|business name)$/i, "company", 0.75],
+  [/^(company|company name|organi[sz]ation|organi[sz]ation name|entity|entity name|business name|legal name|legal entity name|(client|customer|company|vendor|provider|supplier)'?s? (legal name|company|company name|legal entity))$/i, "company", 0.75],
   [/^(notice address|address|email|e-mail|email address)$/i, "text", 0.6],
 ];
 
@@ -119,6 +123,11 @@ function cleanLabel(s: string) {
     .replace(/^[\s:.,-]+/, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Exported for tests: what a printed label means ("Date signed:" -> date). */
+export function classifyLabel(raw: string) {
+  return classify(raw);
 }
 
 function classify(raw: string): { kind: LabelKind; conf: number } | null {
