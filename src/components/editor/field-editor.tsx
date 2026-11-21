@@ -15,6 +15,8 @@ export interface EditorProps {
   pdfUrl: string;
   pages: DisplayPage[];
   initialFields: FieldDef[];
+  /** Firm fields kept aside while "Firm signs too" is off. */
+  initialParked?: FieldDef[];
   initialCountersign: boolean;
   initialFirmFirst: boolean;
   signaturePageAppended: boolean;
@@ -36,6 +38,8 @@ export function FieldEditor(props: EditorProps) {
   const [name, setName] = useState(props.initialName);
   const [fields, setFields] = useState<FieldDef[]>(props.initialFields);
   const [countersign, setCountersign] = useState(props.initialCountersign);
+  const [parked, setParked] = useState<FieldDef[]>(props.initialParked ?? []);
+  const [firmBusy, setFirmBusy] = useState(false);
   const [firmFirst, setFirmFirst] = useState(props.initialFirmFirst);
   const [selected, setSelected] = useState<string | null>(null);
   const [armed, setArmed] = useState<FieldType | null>(null);
@@ -48,13 +52,13 @@ export function FieldEditor(props: EditorProps) {
   const first = useRef(true);
   const appendingRef = useRef(false);
   // Autosave bookkeeping: one request in flight at a time, always sending the latest state.
-  const latest = useRef({ name, countersign, firmFirst, fields });
-  latest.current = { name, countersign, firmFirst, fields };
+  const latest = useRef({ name, countersign, firmFirst, fields, parked });
+  latest.current = { name, countersign, firmFirst, fields, parked };
   const rev = useRef(0); // bumped on every edit
   // What the server last confirmed. "Unsaved" is derived from this during render, so the
   // badge never shows "saved" for a frame between an edit and the autosave effect.
-  const snapshot = (n: string, c: boolean, ff: boolean, f: FieldDef[]) => JSON.stringify([n.trim() || "Untitled agreement", c, c && ff, f]);
-  const confirmed = useRef(snapshot(props.initialName, props.initialCountersign, props.initialFirmFirst, props.initialFields));
+  const snapshot = (n: string, c: boolean, ff: boolean, f: FieldDef[], pk: FieldDef[]) => JSON.stringify([n.trim() || "Untitled agreement", c, c && ff, f, pk]);
+  const confirmed = useRef(snapshot(props.initialName, props.initialCountersign, props.initialFirmFirst, props.initialFields, props.initialParked ?? []));
   const inFlight = useRef<Promise<void> | null>(null);
   const again = useRef(false);
 
@@ -94,19 +98,19 @@ export function FieldEditor(props: EditorProps) {
       do {
         again.current = false;
         const sent = rev.current;
-        const { name: n, countersign: c, firmFirst: ff, fields: f } = latest.current;
+        const { name: n, countersign: c, firmFirst: ff, fields: f, parked: pk } = latest.current;
         setSave({ state: "saving" });
         try {
           const res = await fetch(`/api/templates/${props.templateId}`, {
             method: "PUT",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ pdfSha256: props.pdfSha256, name: n.trim() || "Untitled agreement", countersign: c, firmFirst: c && ff, fields: f }),
+            body: JSON.stringify({ pdfSha256: props.pdfSha256, name: n.trim() || "Untitled agreement", countersign: c, firmFirst: c && ff, fields: f, parkedFields: pk }),
           });
           if (res.status === 401) return router.push(`/login?next=/templates/${props.templateId}`);
           if (res.status === 409) return router.refresh();
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error ?? "Save failed");
-          confirmed.current = snapshot(n, c, ff, f);
+          confirmed.current = snapshot(n, c, ff, f, pk);
           setSave({ state: rev.current === sent ? "saved" : "dirty" });
           if (rev.current !== sent) again.current = true;
         } catch (e) {
@@ -130,15 +134,16 @@ export function FieldEditor(props: EditorProps) {
     setSave({ state: "dirty" });
     const t = setTimeout(() => void saveNow(), 700);
     return () => clearTimeout(t);
-  }, [fields, name, countersign, firmFirst, saveNow]);
+  }, [fields, name, countersign, firmFirst, parked, saveNow]);
 
-  const unsaved = snapshot(name, countersign, firmFirst, fields) !== confirmed.current;
+  const unsaved = snapshot(name, countersign, firmFirst, fields, parked) !== confirmed.current;
   const shownSave: Save = save.state === "error" || save.state === "saving" ? save : { state: unsaved ? "dirty" : "saved" };
   const problems = useMemo(() => validateFields(fields, rolesFor(countersign, firmFirst), props.pages.length), [fields, countersign, firmFirst, props.pages.length]);
 
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
-      if (snapshot(latest.current.name, latest.current.countersign, latest.current.firmFirst, latest.current.fields) !== confirmed.current) e.preventDefault();
+      const l = latest.current;
+      if (snapshot(l.name, l.countersign, l.firmFirst, l.fields, l.parked) !== confirmed.current) e.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
@@ -187,15 +192,16 @@ export function FieldEditor(props: EditorProps) {
     const meta = FIELD_META[armed];
     const w = Math.min(meta.w / page.width, 0.9);
     const h = Math.min(meta.h / page.height, 0.5);
+    const x = clamp(fx - w / 2, 0, 1 - w), y = clamp(fy - h / 2, 0, 1 - h);
     const f: FieldDef = {
       id: uid(),
       page: page.page,
-      x: clamp(fx - w / 2, 0, 1 - w),
-      y: clamp(fy - h / 2, 0, 1 - h),
+      x,
+      y,
       w,
       h,
       type: armed,
-      roleKey: hasNoSigner(armed) ? null : countersign ? lastRole : "client",
+      roleKey: hasNoSigner(armed) ? null : countersign ? (columnSigner(fields, page.page, x, w, y) ?? lastRole) : "client",
       label: meta.label,
       required: armed !== "checkbox" && armed !== "text",
       confidence: 1,
@@ -205,6 +211,23 @@ export function FieldEditor(props: EditorProps) {
     commit((prev) => [...prev, f]);
     setSelected(f.id);
     if (!keepArmed) setArmed(null);
+    // Snap onto the blank it was dropped near (server knows the page's text and lines).
+    void fetch(`/api/templates/${props.templateId}/snap`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ page: f.page, x: f.x, y: f.y, w: f.w, h: f.h, type: f.type }) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { placement: { x: number; y: number; w: number; h: number; snapped: boolean } | null } | null) => {
+        const p = d?.placement;
+        if (!p) return;
+        setFields((prev) =>
+          prev.map((x) => {
+            if (x.id !== f.id || x.x !== f.x || x.y !== f.y) return x; // moved by hand meanwhile: leave it
+            const moved = { ...x, x: p.x, y: p.y, w: p.w, h: p.h };
+            // Snapped into another signer's column: take that signer.
+            const role = countersign && !hasNoSigner(x.type) ? columnSigner(prev.filter((o) => o.id !== x.id), x.page, p.x, p.w, p.y) : null;
+            return role ? { ...moved, roleKey: role } : moved;
+          }),
+        );
+      })
+      .catch(() => undefined);
   }
 
   // ---- drag / resize ----
@@ -242,14 +265,34 @@ export function FieldEditor(props: EditorProps) {
   }
 
   // ---- signers ----
-  function toggleCountersign(on: boolean) {
+  // Turning the firm off sets its fields aside (kept, with every edit); turning it back on
+  // restores them exactly. If the firm never had fields, detect its side of the block then.
+  async function toggleCountersign(on: boolean) {
     if (!on) {
       const firm = fields.filter((f) => f.roleKey === "firm");
-      if (firm.length && !window.confirm(`Turn off countersigning? The ${firm.length} firm field${firm.length > 1 ? "s" : ""} will be removed.`)) return;
       commit((prev) => prev.filter((f) => f.roleKey !== "firm"));
+      setParked((p) => [...p.filter((x) => !firm.some((f) => f.id === x.id)), ...firm]);
       setLastRole("client");
+      setCountersign(false);
+      return;
     }
-    setCountersign(on);
+    if (parked.length) {
+      const back = parked;
+      commit((prev) => [...prev, ...back.filter((b) => !prev.some((f) => f.id === b.id))]);
+      setParked([]);
+      setCountersign(true);
+      return;
+    }
+    setCountersign(true);
+    if (fields.some((f) => f.roleKey === "firm")) return;
+    setFirmBusy(true);
+    const res = await fetch(`/api/templates/${props.templateId}/firm-fields`, { method: "POST" }).catch(() => null);
+    setFirmBusy(false);
+    const found: FieldDef[] = res?.ok ? ((await res.json()).fields ?? []) : [];
+    // Skip anything that would sit on a field already there.
+    const free = found.filter((n) => !fields.some((f) => f.page === n.page && f.x < n.x + n.w && n.x < f.x + f.w && f.y < n.y + n.h && n.y < f.y + f.h));
+    if (free.length) commit((prev) => [...prev, ...free]);
+    else setBanner(`No ${props.firmName} signature block found. Add the firm's fields by hand (pick a type above, then click the page).`);
   }
 
   async function appendPage() {
@@ -451,11 +494,11 @@ export function FieldEditor(props: EditorProps) {
             </li>
             <li className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${countersign ? "bg-violet-600" : "bg-neutral-300"}`} /> {props.firmName} countersigns
-              <span className="ml-auto text-muted">{countersign ? `${counts.firm} fields` : "off"}</span>
+              <span className="ml-auto text-muted" data-testid="firm-count">{firmBusy ? "finding fields…" : countersign ? `${counts.firm} fields` : parked.length ? `off (${parked.length} fields kept)` : "off"}</span>
             </li>
           </ul>
           <label className="mt-3 flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={countersign} onChange={(e) => toggleCountersign(e.target.checked)} />
+            <input type="checkbox" checked={countersign} disabled={firmBusy} onChange={(e) => void toggleCountersign(e.target.checked)} />
             Firm signs too
           </label>
           {countersign && (
@@ -726,3 +769,20 @@ function SaveBadge({ save, onRetry }: { save: Save; onRetry: () => void }) {
   );
 }
 
+
+/**
+ * The signer of the nearest field in the same column (overlapping horizontally) on the page:
+ * a field added under the Customer column belongs to the client, under Vendor to the firm.
+ */
+function columnSigner(fields: FieldDef[], page: number, x: number, w: number, y: number): "client" | "firm" | null {
+  let best: FieldDef | null = null;
+  let bestD = Infinity;
+  for (const f of fields) {
+    if (f.page !== page || (f.roleKey !== "client" && f.roleKey !== "firm")) continue;
+    const overlap = Math.min(x + w, f.x + f.w) - Math.max(x, f.x);
+    if (overlap <= Math.min(w, f.w) * 0.3) continue;
+    const d = Math.abs(f.y - y);
+    if (d < bestD) [best, bestD] = [f, d];
+  }
+  return best ? (best.roleKey as "client" | "firm") : null;
+}

@@ -6,7 +6,7 @@ import type { AuthContext } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
 import { FIELD_TYPES, hasNoSigner, type FieldDef, type RoleDef } from "@/lib/fields/types";
 import { matchFields } from "@/lib/pdf/match";
-import { detectFields } from "@/lib/pdf/detect";
+import { detectFields, snapPlacement } from "@/lib/pdf/detect";
 import { DEFAULT_ROLES, rolesFor, validateFields } from "@/lib/fields/validate";
 import { extractLayout } from "@/lib/pdf/extract";
 import { prepareDocument, sha256 } from "@/lib/pdf/prepare";
@@ -233,6 +233,8 @@ export const saveSchema = z.object({
   /** "Firm signs when sending" (firm first) vs "Firm countersigns after the client". */
   firmFirst: z.boolean().optional().default(false),
   fields: z.array(fieldSchema).max(500),
+  /** Firm fields kept aside while the firm doesn't sign (omitted = unchanged). */
+  parkedFields: z.array(fieldSchema).max(500).optional(),
 });
 
 export { rolesFor, validateFields };
@@ -246,7 +248,8 @@ export async function saveTemplate(auth: AuthContext, templateId: string, input:
     .filter((f) => f.page <= t.version.pageCount)
     .map((f) => ({ ...f, x: Math.min(f.x, 1 - f.w), y: Math.min(f.y, 1 - f.h), roleKey: hasNoSigner(f.type) ? null : f.roleKey }));
   await db.transaction(async (tx) => {
-    await tx.update(schema.templateVersions).set({ fields, roles }).where(and(eq(schema.templateVersions.id, t.version.id), eq(schema.templateVersions.companyId, auth.company.id)));
+    const parked = input.parkedFields?.filter((f) => f.page <= t.version.pageCount);
+    await tx.update(schema.templateVersions).set({ fields, roles, ...(parked ? { parkedFields: parked } : {}) }).where(and(eq(schema.templateVersions.id, t.version.id), eq(schema.templateVersions.companyId, auth.company.id)));
     await tx
       .update(schema.templates)
       .set({ name: input.name, updatedAt: new Date() })
@@ -326,4 +329,37 @@ export async function appendSignaturePageToTemplate(auth: AuthContext, templateI
   // The pre-append PDF is no longer referenced by this version (the source file is kept).
   if (t.version.pdfKey !== pdfKey) await deleteObjects([t.version.pdfKey]).catch(() => undefined);
   return { fields, pages: out.pages, pageCount: out.pages.length };
+}
+
+// ---------- editor helpers: firm-side detection, snapping a hand-placed field ----------
+
+/** Page layouts per PDF (immutable per sha), cached per process: detection and snapping reuse them. */
+const layoutCache = new Map<string, Promise<Awaited<ReturnType<typeof extractLayout>>>>();
+async function templateLayout(auth: AuthContext, templateId: string) {
+  const t = await getTemplate(auth, templateId);
+  if (!t) return null;
+  let p = layoutCache.get(t.version.pdfSha256);
+  if (!p) {
+    if (layoutCache.size > 20) layoutCache.clear();
+    p = getObject(t.version.pdfKey).then((b) => extractLayout(new Uint8Array(b)));
+    layoutCache.set(t.version.pdfSha256, p);
+    p.catch(() => layoutCache.delete(t.version.pdfSha256));
+  }
+  return { t, layout: await p };
+}
+
+/** "Firm signs too" turned on for the first time: the firm's fields as detection finds them. */
+export async function detectFirmFields(auth: AuthContext, templateId: string): Promise<FieldDef[] | null> {
+  const r = await templateLayout(auth, templateId);
+  if (!r) return null;
+  return detectFields(r.layout, { firmName: auth.company.name }).fields.filter((f) => f.roleKey === "firm");
+}
+
+export const snapSchema = z.object({ page: z.number().int().min(1), x: num01, y: num01, w: z.number().min(0.005).max(1), h: z.number().min(0.005).max(1), type: z.enum(FIELD_TYPES) });
+
+/** A hand-placed field near a blank snaps onto it; it never sits over printed text. Null = leave it as placed. */
+export async function snapField(auth: AuthContext, templateId: string, input: z.infer<typeof snapSchema>) {
+  const r = await templateLayout(auth, templateId);
+  if (!r) return null;
+  return snapPlacement(r.layout[input.page - 1], input);
 }

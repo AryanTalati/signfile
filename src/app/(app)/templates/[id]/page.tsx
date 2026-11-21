@@ -30,6 +30,7 @@ export default async function TemplateEditorPage({ params, searchParams }: { par
       pdfUrl={`/api/templates/${t.template.id}/pdf?v=${v.pdfSha256.slice(0, 12)}`}
       pages={pages}
       initialFields={v.fields}
+      initialParked={v.parkedFields ?? []}
       initialCountersign={(v.roles ?? []).some((r) => r.kind === "firm")}
       initialFirmFirst={isFirmFirst(v.roles)}
       signaturePageAppended={v.signaturePageAppended}

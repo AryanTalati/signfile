@@ -184,6 +184,8 @@ export const templateVersions = pgTable(
     pages: jsonb("pages").$type<PageInfo[]>().notNull(),
     roles: jsonb("roles").$type<RoleDef[]>().notNull(),
     fields: jsonb("fields").$type<FieldDef[]>().notNull().default([]),
+    /** Firm fields set aside while "Firm signs too" is off; restored when it's turned back on. Never sent. */
+    parkedFields: jsonb("parked_fields").$type<FieldDef[]>().notNull().default([]),
     /** Detector output summary (method, counts, warnings) for review and debugging. */
     detection: jsonb("detection").$type<Record<string, unknown>>(),
     signaturePageAppended: boolean("signature_page_appended").notNull().default(false),

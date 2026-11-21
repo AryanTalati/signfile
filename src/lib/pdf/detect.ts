@@ -979,3 +979,46 @@ function widgetType(kind: string, name: string): FieldType | null {
 }
 
 const clamp01 = (n: number) => Math.round(Math.min(1, Math.max(0, n)) * 10000) / 10000;
+
+/**
+ * A field placed by hand: if it was dropped near a blank (underscore run, drawn line, or a
+ * table cell's underline), snap it onto that blank with the size detection would give it.
+ * Either way it never covers printed text (a heading or label). Coordinates are fractions of
+ * the displayed page; returns null when the placement is fine as it is.
+ */
+export function snapPlacement(page: PageLayout | undefined, f: { x: number; y: number; w: number; h: number; type: FieldType }): { x: number; y: number; w: number; h: number; snapped: boolean } | null {
+  if (!page || f.type === "checkbox") return null;
+  let geo = geoCache.get(page);
+  if (!geo) geoCache.set(page, (geo = pageGeo(page)));
+  const W = page.width, H = page.height;
+  const cx = (f.x + f.w / 2) * W, cy = (f.y + f.h / 2) * H;
+  const blanks = [
+    ...geo.runs.map((r) => ({ x1: r.x1, x2: r.x2, bottom: r.baseline + 1 })),
+    ...splitAtVerticals(page.hLines, page.vLines)
+      .filter((s) => s.x2 - s.x1 >= 30 && s.x2 - s.x1 <= W * 0.75)
+      // A line with printed text sitting on it (a filled table row's border, an underlined heading) isn't a blank.
+      .filter((s) => !geo!.ink.some((g) => g.baseline <= s.y1 + 1 && g.baseline >= s.y1 - 14 && xOverlap(g.x, g.x2, s.x1, s.x2) > 0.5))
+      .map((s) => ({ x1: s.x1, x2: s.x2, bottom: s.y1 })),
+  ];
+  // Near = the click is over the blank's span and just above (or on) its line.
+  let best: (typeof blanks)[number] | null = null;
+  let bestCost = Infinity;
+  for (const b of blanks) {
+    const dx = cx < b.x1 ? b.x1 - cx : cx > b.x2 ? cx - b.x2 : 0;
+    const dy = b.bottom - cy;
+    if (dx > 12 || dy < -10 || dy > 40) continue;
+    const cost = dx * 2 + Math.abs(dy - 6);
+    if (cost < bestCost) [best, bestCost] = [b, cost];
+  }
+  const r = (n: number) => Math.round(n * 10000) / 10000;
+  const out = (b: { x: number; y: number; w: number; h: number }, snapped: boolean) => ({ x: r(b.x / W), y: r(Math.max(0, b.y) / H), w: r(Math.min(b.w, W - b.x) / W), h: r(b.h / H), snapped });
+  if (best) {
+    const width = best.x2 - best.x1;
+    const [w, h] = f.type === "signature" ? [Math.min(Math.max(width, 120), 240), 26] : f.type === "initials" ? [Math.min(Math.max(width, 40), 70), 20] : [Math.min(Math.max(width, 60), 220), 15];
+    return out(fitBox(geo, Math.min(best.x1, W - w - 4), w, h, best.bottom), true);
+  }
+  // Not near a blank: keep it where it was dropped unless it covers text; then fit it to the clear space.
+  const x1 = f.x * W, x2 = (f.x + f.w) * W, y1 = f.y * H, y2 = (f.y + f.h) * H;
+  const covers = geo.ink.some((g) => xOverlap(g.x, g.x2, x1, x2) > 0.5 && xOverlap(g.y, g.baseline, y1, y2) > 0.5);
+  return covers ? out(fitBox(geo, x1, x2 - x1, y2 - y1, y2 + 1), false) : null;
+}
