@@ -21,3 +21,9 @@ test("labels read naturally and never show a raw event name", () => {
   assert.equal(eventLabel({ type: "file.voided", actorLabel: "Test Admin", data: { reason: "Wrong scope" } }), "Voided by Test Admin: Wrong scope");
   assert.doesNotMatch(eventLabel({ type: "some.future_event" }), /\./);
 });
+
+test("timeline dates read 'Nov 20, 2026', never ISO", () => {
+  const label = eventLabel({ type: "recipient.auto_countersigned", actorLabel: "Test Admin", data: { authorizedAt: "2026-11-20T23:23:03.109Z" } });
+  assert.match(label, /Nov 20, 2026/);
+  assert.doesNotMatch(label, /2026-11-20/);
+});

@@ -1,5 +1,6 @@
 "use client";
 
+import { shortDate } from "@/lib/time";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -28,7 +29,7 @@ export function AutoCountersign({ on, since, consentText }: { on: boolean; since
       {on ? (
         <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
           <span className="text-green-700" data-testid="auto-countersign-status">
-            On{since ? ` since ${new Date(since).toLocaleDateString()}` : ""}. Agreements where you countersign complete and seal as soon as the client signs.
+            On{since ? ` since ${shortDate(since)}` : ""}. Agreements where you countersign complete and seal as soon as the client signs.
           </span>
           <button type="button" disabled={busy} onClick={() => set(false)} className="rounded-lg border border-border px-3 py-1.5 text-sm">
             Turn off

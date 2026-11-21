@@ -42,7 +42,7 @@ test("auto-countersign: off by default; when on, the firm's saved signature is a
   await expect(page.getByText("Signed and sealed")).toBeVisible();
   await expect(page.getByTestId("recipient-firm").getByTestId("recipient-status")).toHaveText("Signed");
   const labels = await page.getByTestId("timeline-label").allInnerTexts();
-  expect(labels.some((l) => /^Countersigned automatically with Test Admin's saved signature \(authorized \d{4}-\d{2}-\d{2}\)$/.test(l))).toBe(true);
+  expect(labels.some((l) => /^Countersigned automatically with Test Admin's saved signature \(authorized [A-Z][a-z]{2} \d{1,2}, \d{4}\)$/.test(l))).toBe(true);
   await expect(page.getByText(/^Countersign: /)).toHaveCount(0); // no "please countersign" email
 
   const text = await sealedText(page, fileUrl);

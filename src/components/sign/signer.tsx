@@ -39,7 +39,7 @@ export function Signer(p: Props) {
   const pageEls = useRef(new Map<number, HTMLDivElement>());
   // Preview of the date this signer will get, in their local format. Display only: it is never
   // put in `values`, so it can't be submitted or stamped (the server sets the real date).
-  const datePreview = useMemo(() => new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }), []);
+  const datePreview = useMemo(() => new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }), []);
 
   const mine = useMemo(
     () => p.fields.filter((f) => f.roleKey === p.myRole && f.type !== "firm_fill" && f.type !== "agreement_date").sort((a, b) => a.page - b.page || a.y - b.y || a.x - b.x),
