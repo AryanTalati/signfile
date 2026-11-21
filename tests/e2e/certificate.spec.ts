@@ -83,8 +83,10 @@ test("firm-filled dates default to today, stamp as 'November 20, 2026' in the su
   await page.goto(fileUrl);
   const res = await page.request.get((await page.getByTestId("download-signed").getAttribute("href"))!);
   const layout = await extractLayout(new Uint8Array(await res.body()));
-  const all = layout.flatMap((p) => p.items);
-  expect(all.map((i) => i.str).join(" ")).not.toContain(today); // never the raw yyyy-mm-dd
+  // Agreement pages only: the certificate's UTC timestamps legitimately start with yyyy-mm-dd.
+  const agreementPages = layout.slice(0, layout.findIndex((p) => p.items.some((i) => i.str.includes("Certificate of Completion"))));
+  expect(agreementPages.length).toBeGreaterThan(0);
+  expect(agreementPages.flatMap((p) => p.items).map((i) => i.str).join(" ")).not.toContain(today); // never the raw yyyy-mm-dd
   // "Dated: ____" on the last agreement page: the stamped date matches the label's font and size.
   const page3 = layout.find((p) => p.items.some((i) => /^Dated:?/.test(i.str)))!;
   const label = page3.items.find((i) => /^Dated:?/.test(i.str))!;
