@@ -18,8 +18,8 @@ test("AI review: a disputed field is flagged 'AI-suggested' until a person confi
   const review = page.getByTestId("review-list");
   await expect(review.getByTestId("flagged-item")).toHaveCount(1);
   const item = review.getByTestId("flagged-item").first();
-  await expect(item.getByTestId("ai-suggested")).toHaveText("AI-suggested");
-  await expect(item).toContainText("AI suggests: Full name for the client");
+  await expect(item.getByTestId("confirm-note")).toHaveText("Please confirm this field"); // neutral: no AI wording, no numbers
+  await expect(item).not.toContainText("AI");
   await item.getByRole("button", { name: "Looks right" }).click();
   await expect(page.getByTestId("review-list")).toHaveCount(0);
   await expect(page.getByTestId("save-state")).toHaveText("All changes saved", { timeout: 15_000 });
@@ -42,5 +42,5 @@ test("AI off for everyone else: rules only, no AI marks, no key terms", async ({
   await signupFresh(page, "E2E Rules Only Co");
   await uploadAgreement(page, "fixtures/agreements/pdf-saas-table.pdf");
   await expect(page.getByTestId("field")).toHaveCount(10);
-  await expect(page.getByTestId("ai-suggested")).toHaveCount(0);
+  await expect(page.getByTestId("review-list")).toContainText("Company"); // rules-only: the two lower-confidence Company fields
 });

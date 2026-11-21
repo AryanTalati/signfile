@@ -419,7 +419,7 @@ export function FieldEditor(props: EditorProps) {
               We found <strong>{fields.length}</strong> field{fields.length === 1 ? "" : "s"}
               {flagged.length ? (
                 <>
-                  , <strong>{flagged.length}</strong> marked ⚠ for you to check
+                  , <strong>{flagged.length}</strong> for you to confirm
                 </>
               ) : null}
               . Drag to move, drag the corner to resize, click a field to change its type or signer.
@@ -540,20 +540,15 @@ export function FieldEditor(props: EditorProps) {
         {flagged.length > 0 && (
           <Card className="p-4" data-testid="review-list">
             <h2 className="text-sm font-semibold">
-              Check {flagged.length} field{flagged.length > 1 ? "s" : ""} <span className="text-amber-600">⚠</span>
+              Confirm {flagged.length} field{flagged.length > 1 ? "s" : ""}
             </h2>
-            <p className="mt-1 text-xs text-muted">We weren&apos;t sure about these. Move or edit them, or confirm they&apos;re right.</p>
+            <p className="mt-1 text-xs text-muted">Move or edit them if needed, or confirm they&apos;re right.</p>
             <ul className="mt-2 divide-y divide-border">
               {flagged.map((f) => (
-                <li key={f.id} className="flex items-center gap-2 py-2 text-sm" data-testid="flagged-item" data-ai={f.ai ? "true" : "false"}>
-                  <button type="button" onClick={() => scrollTo(f)} className="min-w-0 flex-1 text-left hover:underline" title={f.reason}>
+                <li key={f.id} className="flex items-center gap-2 py-2 text-sm" data-testid="flagged-item">
+                  <button type="button" onClick={() => scrollTo(f)} className="min-w-0 flex-1 text-left hover:underline">
                     <span className="font-medium">{f.label}</span> <span className="text-muted">· p{f.page} · {f.roleKey ?? "you"}</span>
-                    {f.ai && (
-                      <span className="ml-1 rounded bg-violet-100 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-violet-800" data-testid="ai-suggested">
-                        AI-suggested
-                      </span>
-                    )}
-                    <span className="block text-xs text-amber-700">{f.ai ? `AI suggests: ${f.ai.suggestion}` : `${Math.round(f.confidence * 100)}% sure`}</span>
+                    <span className="block text-xs text-amber-700" data-testid="confirm-note">Please confirm this field</span>
                   </button>
                   <button type="button" onClick={() => update(f.id, { reviewed: true })} className="shrink-0 rounded-md border border-border px-2 py-1 text-xs hover:bg-neutral-50">
                     Looks right
@@ -635,7 +630,6 @@ export function FieldEditor(props: EditorProps) {
 function FieldBox({ f, selected, onPointerDown }: { f: FieldDef; selected: boolean; onPointerDown: (e: React.PointerEvent, mode: "move" | "resize") => void }) {
   const c = ROLE_COLORS[f.roleKey ?? "none"] ?? ROLE_COLORS.none;
   const flag = needsReview(f);
-  const showConf = f.source !== "manual" && f.source !== "appended";
   return (
     <div
       role="button"
@@ -645,7 +639,7 @@ function FieldBox({ f, selected, onPointerDown }: { f: FieldDef; selected: boole
       data-field-type={f.type}
       data-role={f.roleKey ?? "none"}
       data-flagged={flag ? "true" : "false"}
-      title={f.reason ? `${f.label} · ${Math.round(f.confidence * 100)}% · ${f.reason}` : f.label}
+      title={f.label}
       onPointerDown={(e) => onPointerDown(e, "move")}
       className={`group absolute select-none touch-none rounded-[3px] ${selected ? "z-10 ring-2 ring-offset-1" : ""}`}
       style={{
@@ -663,13 +657,13 @@ function FieldBox({ f, selected, onPointerDown }: { f: FieldDef; selected: boole
       <span className="pointer-events-none absolute inset-0 flex items-center overflow-hidden px-1 text-[10px] font-medium leading-none sm:text-[11px]" style={{ color: c.text }}>
         {f.type === "checkbox" ? "☐" : f.label}
       </span>
-      {(showConf || flag) && (
+      {flag && (
         <span
-          className={`pointer-events-none absolute -top-2 right-0 translate-y-[-50%] rounded px-1 text-[9px] font-semibold leading-tight ${flag ? "bg-amber-500 text-white" : "bg-white/90 text-neutral-600 ring-1 ring-neutral-200"}`}
-          data-testid="confidence"
+          className="pointer-events-none absolute -top-2 right-0 translate-y-[-50%] rounded bg-amber-500 px-1 text-[9px] font-semibold leading-tight text-white"
+          data-testid="confirm-mark"
+          aria-hidden
         >
-          {flag ? "⚠ " : ""}
-          {Math.round(f.confidence * 100)}%
+          Confirm
         </span>
       )}
       <span
@@ -773,17 +767,13 @@ function Inspector({
         <input type="checkbox" checked={f.required} onChange={(e) => onChange({ required: e.target.checked })} /> Required
       </label>
 
-      {f.ai && !f.reviewed && (
-        <p className="mt-3 rounded-md bg-violet-50 px-2 py-1.5 text-xs text-violet-900" data-testid="ai-note">
-          <span className="font-semibold">AI-suggested.</span> AI suggests: {f.ai.suggestion}. The rules&apos; answer is shown; check it, change it if needed, then press Looks right.
+      {needsReview(f) ? (
+        <p className="mt-3 text-xs text-amber-800" data-testid="confirm-note">
+          Please confirm this field.
         </p>
-      )}
-      {f.source !== "manual" && (
-        <p className="mt-3 text-xs text-muted" data-testid="field-confidence">
-          {f.source === "appended" ? "Added with the signature page." : `Detected · ${Math.round(f.confidence * 100)}% sure${f.reviewed ? " · checked" : ""}`}
-          {f.reason ? <span className="block">{f.reason}</span> : null}
-        </p>
-      )}
+      ) : f.source === "appended" ? (
+        <p className="mt-3 text-xs text-muted">Added with the signature page.</p>
+      ) : null}
 
       <div className="mt-4 flex gap-2">
         {needsReview(f) && (

@@ -42,7 +42,7 @@ export interface FieldDef {
   required: boolean;
   /** For firm_fill: the key in files.firm_values. */
   firmFillKey?: string;
-  /** 0-1. Below the review threshold (0.7), the editor flags it until reviewed. */
+  /** 0-1. Internal only (never shown): below the review threshold the editor asks a person to confirm it. */
   confidence: number;
   source: "rule" | "manual" | "ai" | "appended" | "acroform";
   /** Why the detector placed it (shown on hover in the editor). */
@@ -56,7 +56,8 @@ export interface FieldDef {
   ai?: { suggestion: string; confidence: number };
 }
 
-export const REVIEW_THRESHOLD = 0.7;
+/** At or above this, a detected field is accepted silently; below it, a person confirms it. */
+export const REVIEW_THRESHOLD = 0.85;
 /** Field types nobody signs: filled by the firm at File creation, or by the system. */
 export const NO_SIGNER_TYPES: FieldType[] = ["firm_fill", "agreement_date"];
 export const hasNoSigner = (t: FieldType) => NO_SIGNER_TYPES.includes(t);

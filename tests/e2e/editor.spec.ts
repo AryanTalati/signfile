@@ -125,3 +125,32 @@ test("Back after upload goes to Templates (not an empty upload step); the unfini
   await expect(page).toHaveURL(/\/templates$/);
   await expect(page.getByTestId("template-row").filter({ hasText: "pdf-saas-table" }).getByTestId("template-draft")).toHaveCount(0);
 });
+
+/** Words and numbers from detection internals that must never reach the editor. */
+const DEBUG = /\d+%|sure|prefix label|underscore|row label|heading:|AI-suggested|AI review|defined party/i;
+const allTitles = (page: Page) => page.locator("[title]").evaluateAll((els) => els.map((e) => e.getAttribute("title") ?? "").join(" | "));
+
+test("high-confidence fields are accepted silently; a low-confidence one shows only a neutral note", async ({ page }) => {
+  await signupFresh(page, "E2E Editor Co");
+  // Every field at or above the threshold: no review section, no marks, no numbers, no debug text.
+  await uploadAgreement(page, "fixtures/agreements/pdf-two-column.pdf");
+  await expect(page.getByTestId("field")).toHaveCount(8);
+  await expect(page.getByTestId("ready")).toHaveText("✓ Ready to send");
+  await expect(page.getByTestId("review-list")).toHaveCount(0);
+  await expect(page.getByTestId("confirm-mark")).toHaveCount(0);
+  await page.getByTestId("field").first().click(); // the inspector shows no detection detail either
+  await expect(page.getByTestId("inspector")).toBeVisible();
+  expect(await page.locator("main").innerText()).not.toMatch(DEBUG);
+  expect(await allTitles(page)).not.toMatch(DEBUG);
+
+  // Two fields below the threshold (Company): each shows only "Please confirm this field".
+  await uploadAgreement(page, SAAS);
+  await expect(page.getByTestId("field")).toHaveCount(10);
+  const items = page.getByTestId("review-list").getByTestId("flagged-item");
+  await expect(items).toHaveCount(2);
+  for (const n of await items.getByTestId("confirm-note").allInnerTexts()) expect(n).toBe("Please confirm this field");
+  await field(page, "client", "company").click();
+  await expect(page.getByTestId("inspector").getByTestId("confirm-note")).toHaveText("Please confirm this field.");
+  expect(await page.locator("main").innerText()).not.toMatch(DEBUG);
+  expect(await allTitles(page)).not.toMatch(DEBUG);
+});

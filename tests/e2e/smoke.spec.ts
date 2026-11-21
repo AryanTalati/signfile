@@ -22,7 +22,8 @@ test("upload PDF + DOCX, edit and save, scanned-PDF fallback", async ({ page }) 
   // PDF: fields detected with confidence; retype one and save.
   await uploadAgreement(page, "fixtures/agreements/pdf-two-column.pdf");
   await expect(fields).toHaveCount(8);
-  await expect(page.getByTestId("confidence").first()).toBeVisible();
+  await expect(page.getByTestId("field").first()).toBeVisible();
+  expect(await page.locator("main").innerText()).not.toMatch(/\d+%/); // confidence is internal, never shown
   await page.locator('[data-testid="field"][data-role="client"][data-field-type="title"]').click();
   await page.getByTestId("inspector").getByRole("radio", { name: "Text" }).click();
   await expect(page.locator('[data-testid="field"][data-role="client"][data-field-type="text"]')).toHaveCount(1);

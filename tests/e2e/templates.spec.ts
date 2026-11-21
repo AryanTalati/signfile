@@ -13,7 +13,8 @@ test("PDF upload: fields detected with confidence; edit, retype, reassign, add, 
   await uploadAgreement(page, "fixtures/agreements/pdf-two-column.pdf");
 
   await expect(fields(page)).toHaveCount(8);
-  await expect(page.getByTestId("confidence").first()).toBeVisible();
+  await expect(page.getByTestId("field").first()).toBeVisible();
+  expect(await page.locator("main").innerText()).not.toMatch(/\d+%/); // confidence is internal, never shown
   await expect(page.getByTestId("ready")).toBeVisible();
   await saved(page);
 
