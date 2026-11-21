@@ -8,7 +8,7 @@ import { deleteObjects, getObject, putObject } from "@/lib/storage";
 import { formatFirmValue, formatSignedDate } from "@/lib/fields/format";
 import { signedTitle } from "@/lib/fields/signer-details";
 import { stampAll } from "@/lib/pdf/stamp";
-import { localStamp, utcAndLocal, utcStamp, validTimeZone } from "@/lib/time";
+import { utcAndLocal, validTimeZone } from "@/lib/time";
 import { eventLabel } from "./event-labels";
 
 /**
@@ -218,7 +218,7 @@ async function appendCertificate(
       // Signed by the system on their standing instruction: say so, and show where and when they gave it.
       const at = s.autoAuthorizedAt;
       row("Method", "Automatic countersign using saved signature");
-      row("Authorized", [[localStamp(at, tz), utcStamp(at)].filter(Boolean).join(" / "), `IP ${s.ip ?? "not recorded"}`, `browser ${(s.userAgent ?? "not recorded").slice(0, 200)}`].join(", "));
+      row("Authorized", [when(at, tz), `IP ${s.ip ?? "not recorded"}`, `browser ${(s.userAgent ?? "not recorded").slice(0, 200)}`].join(", "));
       row("Agreed to e-sign", when(at, tz));
       row("Signed", when(s.signedAt, tz));
       if (tz) row("Time zone", `${tz} (${c.firm}'s time zone)`);
