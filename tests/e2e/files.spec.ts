@@ -41,9 +41,11 @@ test("'Filled by you' values are required before sending", async ({ page }) => {
   await page.getByLabel("Client's legal name").fill("Initech Test Co.");
   await page.getByLabel("Name", { exact: true }).fill("Sam Example");
   await page.getByLabel("Email").fill("sam@example.com");
+  // Date fills are date pickers that default to today: clear it to test the required check.
+  await page.getByLabel("Date", { exact: true }).fill("");
   await page.getByRole("button", { name: "Send for signature" }).click();
   await expect(page.getByText('Fill in "Date".')).toBeVisible();
-  await page.getByLabel("Date", { exact: true }).fill("November 20, 2026");
+  await page.getByLabel("Date", { exact: true }).fill("2026-11-20");
   await page.getByRole("button", { name: "Send for signature" }).click();
   await page.waitForURL(/\/files\/[0-9a-f-]{36}\?sent=1/);
   await expect(page.getByTestId("file-status")).toHaveText("Waiting for client");

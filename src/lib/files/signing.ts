@@ -11,7 +11,7 @@ import { fitToPage } from "@/lib/pdf/detect";
 import { extractLayout } from "@/lib/pdf/extract";
 import { signLink } from "./service";
 import { appUrl } from "@/lib/http/app-url";
-import { formatSignedDate } from "@/lib/fields/format";
+import { formatFirmValue, formatSignedDate } from "@/lib/fields/format";
 import { detailChanges, signedTitle } from "@/lib/fields/signer-details";
 
 /**
@@ -96,7 +96,7 @@ export async function signingView(ctx: SigningContext) {
   // Read-only values shown on the page: firm-filled values + earlier signers' values.
   const shown: Record<string, string> = {};
   for (const f of doc.fields) {
-    if (f.type === "firm_fill") shown[f.id] = firmValues[f.firmFillKey ?? f.id] ?? "";
+    if (f.type === "firm_fill") shown[f.id] = formatFirmValue(firmValues[f.firmFillKey ?? f.id] ?? "");
     // agreement_date stays empty until the last party signs (then it's stamped at sealing).
   }
   for (const o of others) for (const [k, v] of Object.entries(o.values ?? {})) shown[k] = String(v);

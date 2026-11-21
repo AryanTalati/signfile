@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { extractLayout } from "../../src/lib/pdf/extract";
-import { sendFile, signupFresh, signViaLink } from "./helpers";
+import { sendFile, signupFresh, signViaLink, uploadAgreement } from "./helpers";
 
 test.skip(!process.env.E2E_BASE_URL, "needs E2E_BASE_URL (Docker image) for uploads");
 test.setTimeout(240_000);
@@ -57,4 +57,39 @@ test("certificate shows each signer's title as used in the signed document", asy
   expect(certificate).toContain("Event log (UTC / America/Phoenix)");
   expect(certificate).toMatch(new RegExp(`${stamp}\\s+All parties signed`));
   expect(certificate).not.toMatch(/UTC (?!\/)[A-Z][a-z]+ /); // no event line with UTC only
+});
+
+test("firm-filled dates default to today, stamp as 'November 20, 2026' in the surrounding font and size", async ({ page, browser }) => {
+  await signupFresh(page, "E2E Certificate Co");
+  await uploadAgreement(page, "fixtures/agreements/pdf-date-blanks.pdf");
+  await page.getByRole("link", { name: "Create a File with this template" }).click();
+  // Today in the sender's own time zone (not the server's, not a remembered value).
+  const today = await page.evaluate(() => new Date().toLocaleDateString("en-CA"));
+  const pickers = page.getByTestId("date-fill");
+  await expect(pickers.first()).toHaveValue(today);
+  const pretty = new Date(`${today}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" });
+  await expect(page.getByText(`Appears in the agreement as ${pretty}.`).first()).toBeVisible();
+  await page.getByLabel("Client's legal name").fill("Initech Test Co.");
+  await page.getByLabel("Name", { exact: true }).fill("Sam Example");
+  await page.getByLabel("Email").fill("sam@example.com");
+  await page.getByRole("button", { name: "Send for signature" }).click();
+  await page.waitForURL(/\/files\/[0-9a-f-]{36}\?sent=1/);
+  const fileUrl = page.url().replace("?sent=1", "");
+  const clientLink = await page.getByTestId("signing-link").first().inputValue();
+  await signViaLink(await (await browser.newContext()).newPage(), clientLink);
+  await page.goto(fileUrl);
+  await signViaLink(page, await page.getByTestId("recipient-firm").getByTestId("signing-link").inputValue());
+
+  await page.goto(fileUrl);
+  const res = await page.request.get((await page.getByTestId("download-signed").getAttribute("href"))!);
+  const layout = await extractLayout(new Uint8Array(await res.body()));
+  const all = layout.flatMap((p) => p.items);
+  expect(all.map((i) => i.str).join(" ")).not.toContain(today); // never the raw yyyy-mm-dd
+  // "Dated: ____" on the last agreement page: the stamped date matches the label's font and size.
+  const page3 = layout.find((p) => p.items.some((i) => /^Dated:?/.test(i.str)))!;
+  const label = page3.items.find((i) => /^Dated:?/.test(i.str))!;
+  const stamped = page3.items.find((i) => i.str.includes(pretty) && Math.abs(i.baseline - label.baseline) < 6)!;
+  expect(stamped, `"${pretty}" stamped next to "Dated:"`).toBeTruthy();
+  expect(stamped.family).toBe(label.family);
+  expect(Math.abs(stamped.h - label.h)).toBeLessThan(0.6);
 });

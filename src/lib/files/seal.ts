@@ -5,7 +5,7 @@ import { db, schema } from "@/lib/db/client";
 import { recordEmail } from "@/lib/email/outbox";
 import { sha256 } from "@/lib/pdf/prepare";
 import { deleteObjects, getObject, putObject } from "@/lib/storage";
-import { formatSignedDate } from "@/lib/fields/format";
+import { formatFirmValue, formatSignedDate } from "@/lib/fields/format";
 import { signedTitle } from "@/lib/fields/signer-details";
 import { stampAll } from "@/lib/pdf/stamp";
 import { utcAndLocal, validTimeZone } from "@/lib/time";
@@ -61,10 +61,11 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
     const values: Record<string, string> = {};
     for (const s of signers) Object.assign(values, s.values ?? {});
     for (const f of doc.fields) {
-      if (f.type === "firm_fill") values[f.id] = (file.firmValues ?? {})[f.firmFillKey ?? f.id] ?? "";
+      if (f.type === "firm_fill") values[f.id] = formatFirmValue((file.firmValues ?? {})[f.firmFillKey ?? f.id] ?? "");
       if (f.type === "agreement_date") values[f.id] = formatSignedDate(completedAt, lastSigner?.timezone);
     }
-    await stampAll(pdf, original, doc.pages, doc.fields, values, { font, dingbats });
+    const [serif, mono] = await Promise.all([pdf.embedFont(StandardFonts.TimesRoman), pdf.embedFont(StandardFonts.Courier)]);
+    await stampAll(pdf, original, doc.pages, doc.fields, values, { font, dingbats, serif, mono });
 
     await appendCertificate(pdf, {
       font,

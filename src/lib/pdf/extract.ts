@@ -16,6 +16,8 @@ export interface TextItem {
   w: number;
   h: number; // ~font size
   baseline: number;
+  /** Generic family of the font this text is drawn in (from pdf.js). */
+  family?: "serif" | "sans" | "mono";
 }
 
 /** One drawn character at its exact position (displayed coords): from the operator list's text state. */
@@ -112,7 +114,9 @@ async function extractPage(page: pdfjs.PDFPageProxy): Promise<PageLayout> {
     if (Math.abs(t[1]) > 0.01 * Math.abs(t[0]) || t[0] <= 0) continue;
     const size = Math.hypot(t[2], t[3]) || it.height || 10;
     const w = it.width * (Math.hypot(t[0], t[1]) / Math.hypot(it.transform[0], it.transform[1]) || 1);
-    items.push({ str: it.str, x: t[4], y: t[5] - size, w, h: size, baseline: t[5] });
+    const ff = String(tc.styles[it.fontName]?.fontFamily ?? "").toLowerCase();
+    const family = ff.includes("mono") || ff.includes("courier") ? "mono" : ff.includes("sans") ? "sans" : ff.includes("serif") || ff.includes("times") ? "serif" : "sans";
+    items.push({ str: it.str, x: t[4], y: t[5] - size, w, h: size, baseline: t[5], family });
   }
 
   // ---- vector paths (track the CTM through save/restore/transform) ----

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { formatFirmValue, isDateFill } from "@/lib/fields/format";
 import { Alert, Button, Card, Field } from "@/components/ui";
 import { createFileAction, type CreateFileState } from "../actions";
 
@@ -78,9 +79,13 @@ export function NewFileForm(props: {
             <h2 className="font-semibold">Filled by you</h2>
             <p className="text-sm text-muted">These go into the agreement before it&apos;s sent. The client sees them but can&apos;t change them.</p>
           </div>
-          {props.firmFill.map((f) => (
-            <Field key={f.key} label={f.label + (f.required ? "" : " (optional)")} name={`firm:${f.key}`} defaultValue={v[`firm:${f.key}`]} error={fe[`firm:${f.key}`]} />
-          ))}
+          {props.firmFill.map((f) =>
+            isDateFill(f) ? (
+              <DateFill key={f.key} label={f.label + (f.required ? "" : " (optional)")} name={`firm:${f.key}`} initial={v[`firm:${f.key}`]} error={fe[`firm:${f.key}`]} />
+            ) : (
+              <Field key={f.key} label={f.label + (f.required ? "" : " (optional)")} name={`firm:${f.key}`} autoComplete="off" defaultValue={v[`firm:${f.key}`]} error={fe[`firm:${f.key}`]} />
+            ),
+          )}
         </Card>
       )}
 
@@ -140,5 +145,33 @@ export function NewFileForm(props: {
         {pending ? (sendNow ? "Sending…" : "Saving…") : sendNow ? "Send for signature" : "Save as draft"}
       </Button>
     </form>
+  );
+}
+
+/** Today's date in the sender's own time zone (yyyy-mm-dd), computed in the browser. */
+function localToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** A date picker for a firm-filled date (Effective Date…): defaults to today, stamped as "November 20, 2026". */
+function DateFill(p: { label: string; name: string; initial?: string; error?: string }) {
+  const [value, setValue] = useState(p.initial ?? "");
+  // Set after mount: the server doesn't know the sender's date (and must not cache a stale one).
+  useEffect(() => {
+    if (!p.initial) setValue(localToday());
+  }, [p.initial]);
+  return (
+    <Field
+      label={p.label}
+      name={p.name}
+      type="date"
+      autoComplete="off"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      error={p.error}
+      hint={value ? `Appears in the agreement as ${formatFirmValue(value)}.` : undefined}
+      data-testid="date-fill"
+    />
   );
 }
