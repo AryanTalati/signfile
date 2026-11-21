@@ -1,4 +1,5 @@
 import "server-only";
+import { emit } from "@/lib/integrations/dispatch";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db/client";
@@ -44,7 +45,7 @@ async function firmContacts(ctx: SigningContext) {
   return [...out.values()];
 }
 
-export async function declineSigning(ctx: SigningContext, reason: string, meta: Meta) {
+export async function declineSigning(ctx: SigningContext, reason: string, meta: Meta, baseUrl: string) {
   const name = await docName(ctx.file.templateId);
   // Everyone on the File: every signer on the current version and the firm's people.
   const signers = await db
@@ -77,6 +78,7 @@ export async function declineSigning(ctx: SigningContext, reason: string, meta: 
       await recordEmail(tx, { companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: t.recipientId, kind: "declined", toEmail: t.email, toName: t.name, ...email });
     }
   });
+  emit({ event: "file.declined", companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: ctx.recipient.id, reason, baseUrl });
 }
 
 export async function requestChanges(ctx: SigningContext, message: string, meta: Meta, baseUrl: string) {
@@ -111,5 +113,6 @@ export async function requestChanges(ctx: SigningContext, message: string, meta:
       await recordEmail(tx, { companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: f.recipientId, kind: "changes_requested", toEmail: f.email, toName: f.name, ...email });
     }
   });
+  emit({ event: "file.changes_requested", companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: ctx.recipient.id, reason: message, baseUrl });
 }
 

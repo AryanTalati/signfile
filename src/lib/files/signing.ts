@@ -1,4 +1,5 @@
 import "server-only";
+import { emit } from "@/lib/integrations/dispatch";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/lib/db/client";
@@ -132,7 +133,7 @@ export async function signingPdf(ctx: SigningContext) {
 /** First open of an active link: mark viewed (once) and log it. */
 export async function markViewed(ctx: SigningContext, meta: { ip: string | null; userAgent: string | null }) {
   if (ctx.state !== "sign" || ctx.recipient.status !== "active") return;
-  await db.transaction(async (tx) => {
+  const viewed = await db.transaction(async (tx) => {
     const n = await tx
       .update(schema.recipients)
       .set({ status: "viewed", viewedAt: new Date() })
@@ -150,7 +151,9 @@ export async function markViewed(ctx: SigningContext, meta: { ip: string | null;
         ip: meta.ip,
         userAgent: meta.userAgent,
       });
+    return n.length > 0;
   });
+  if (viewed) emit({ event: "file.viewed", companyId: ctx.file.companyId, fileId: ctx.file.id, recipientId: ctx.recipient.id, baseUrl: await appUrl().catch(() => process.env.APP_URL ?? "") });
 }
 
 export const CONSENT_TEXT =
@@ -228,7 +231,7 @@ export async function submitSigning(
   const changes = detailChanges(view.mine, view.prefill, values);
 
   const tz = input.timezone && /^[A-Za-z_+\-/0-9]{1,64}$/.test(input.timezone) ? input.timezone : null;
-  return db.transaction(async (tx) => {
+  const out = await db.transaction(async (tx) => {
     // Lock this signer's row; re-check state inside the lock.
     const locked = await tx.execute(sql`select status, consent_at from recipients where id = ${ctx.recipient.id} for update`);
     const cur = locked[0] as { status: string; consent_at: Date | null } | undefined;
@@ -322,6 +325,11 @@ export async function submitSigning(
     await tx.insert(schema.events).values({ companyId: ctx.file.companyId, fileId: ctx.file.id, actorType: "system", type: "file.completed", data: {} });
     return { completed: true, nextName: null, autoCountersign: null as string | null };
   });
+  // After commit: integrations hear about it in the background (never blocks signing).
+  const ev = { companyId: ctx.file.companyId, fileId: ctx.file.id, baseUrl };
+  emit({ ...ev, event: "file.signed", recipientId: ctx.recipient.id, at: now });
+  if (out.completed) emit({ ...ev, event: "file.completed", at: now });
+  return out;
 }
 
 export { formatSignedDate };

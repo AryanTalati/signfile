@@ -1,4 +1,5 @@
 import "server-only";
+import { emit } from "@/lib/integrations/dispatch";
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -177,6 +178,7 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
     });
     if (input.sendNow) await dispatch(tx, auth, fileId, baseUrl, { skipFirmEmail: signNow });
   });
+  if (input.sendNow) emit({ event: "file.sent", companyId: auth.company.id, fileId, baseUrl });
 
   // "Firm signs when sending": the sender signs now with their saved signature (their own consent
   // and signing events). If that can't complete, the File simply waits for them to sign.
@@ -263,6 +265,7 @@ async function dispatch(tx: Tx, auth: AuthContext, fileId: string, baseUrl: stri
 export async function sendDraft(auth: AuthContext, fileId: string, baseUrl: string) {
   if (!z.string().uuid().safeParse(fileId).success) throw new FileInputError("File not found.");
   await db.transaction((tx) => dispatch(tx, auth, fileId, baseUrl));
+  emit({ event: "file.sent", companyId: auth.company.id, fileId, baseUrl });
 }
 
 async function defaultCountersignerId(auth: AuthContext) {

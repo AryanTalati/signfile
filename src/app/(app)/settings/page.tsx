@@ -7,20 +7,35 @@ import { AutoCountersign } from "./auto-countersign";
 import { DetailsForm } from "./details-form";
 import { SignatureSettings } from "./signature-settings";
 import { RemindersForm } from "./reminders-form";
+import { DeliveryLog, SlackForm, WebhookForm } from "./integrations";
+import { listDeliveries } from "@/lib/integrations/deliveries";
 import { db, schema } from "@/lib/db/client";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const sigFont = Caveat({ subsets: ["latin"], weight: ["600"], variable: "--font-sig" });
 export const metadata: Metadata = { title: "Settings · signfile" };
 
 export default async function SettingsPage() {
   const auth = await requireAuth();
-  const [saved, [company]] = await Promise.all([
+  const admin = auth.user.role === "admin";
+  const [saved, [company], deliveries] = await Promise.all([
     getSavedSignature(auth.user.id),
     db
-      .select({ enabled: schema.companies.remindersEnabled, days: schema.companies.reminderDays, finalDays: schema.companies.finalReminderDays, expiry: schema.companies.linkExpiryDays, timezone: schema.companies.timezone })
+      .select({
+        enabled: schema.companies.remindersEnabled,
+        days: schema.companies.reminderDays,
+        finalDays: schema.companies.finalReminderDays,
+        expiry: schema.companies.linkExpiryDays,
+        timezone: schema.companies.timezone,
+        webhookUrl: schema.companies.webhookUrl,
+        hasSecret: sql<boolean>`${schema.companies.webhookSecret} is not null`,
+        webhookEvents: schema.companies.webhookEvents,
+        slackUrl: schema.companies.slackWebhookUrl,
+        slackEvents: schema.companies.slackEvents,
+      })
       .from(schema.companies)
       .where(eq(schema.companies.id, auth.company.id)),
+    admin ? listDeliveries(auth.company.id) : Promise.resolve([]),
   ]);
   return (
     <div className={`mx-auto flex max-w-2xl flex-col gap-6 ${sigFont.variable}`}>
@@ -44,6 +59,24 @@ export default async function SettingsPage() {
           <p className="mt-1 text-sm text-muted">For your whole firm. Reminders go to whoever&apos;s turn it is and stop once the File is signed, voided, declined or has changes requested.</p>
           <RemindersForm enabled={company.enabled} days={(company.days ?? []).join(", ")} finalDays={company.finalDays} expiry={company.expiry} timezone={company.timezone} />
         </Card>
+      )}
+      {admin && company && (
+        <>
+          <Card className="p-5" data-testid="webhook-card">
+            <h2 className="font-semibold">Webhook</h2>
+            <p className="mt-1 text-sm text-muted">Off until you save a URL. We POST JSON to it when a File changes (who, what, when in UTC, and a link to the signed PDF on completion). Up to 3 attempts, then it&apos;s marked failed below.</p>
+            <WebhookForm url={company.webhookUrl} hasSecret={company.hasSecret} events={company.webhookEvents ?? []} />
+          </Card>
+          <Card className="p-5" data-testid="slack-card">
+            <h2 className="font-semibold">Slack</h2>
+            <p className="mt-1 text-sm text-muted">Off until you save a URL. One short message per event in the channel you chose in Slack.</p>
+            <SlackForm url={company.slackUrl} events={company.slackEvents ?? []} />
+          </Card>
+          <Card className="p-5">
+            <h2 className="font-semibold">Recent deliveries</h2>
+            <DeliveryLog rows={deliveries.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() }))} />
+          </Card>
+        </>
       )}
     </div>
   );

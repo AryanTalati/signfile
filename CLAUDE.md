@@ -86,6 +86,9 @@ Calendar: Phase 1 = Nov 18–20, Phase 2 = Nov 21, Phase 3 = Nov 22, Phase 4 = N
 ## Deliberately left out
 SMS/WhatsApp, native CRM connectors, Teams/Outlook, Stripe billing, identity verification beyond email link, SSO, autonomous/multi-agent design, n8n/Zapier as core, AI memory of client conversations, AI explaining contract terms to clients, in-app editing of agreement text. Reasons in `DECISIONS.md`. Don't build these.
 
+## Testing scope
+- Run tests on desktop Chromium only unless a change is specifically mobile-related. No extra browsers, device emulation or screenshot tests by default.
+
 ## Working rules
 - Day 1 order: (1) hello-world on Render with Docker + LibreOffice + `/api/health`, (2) Supabase DB + migrations, (3) auth + signup + seed, (4) test-agreement generator. If Day 1 runs long, move team invites and branding to Day 3.
 - Seed demo company "Astra AI" with a demo login (credentials in README).

@@ -1,4 +1,6 @@
 import "server-only";
+import { emit } from "@/lib/integrations/dispatch";
+import { appUrl } from "@/lib/http/app-url";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { AuthContext } from "@/lib/auth/session";
 import { requestMeta } from "@/lib/auth/session";
@@ -19,7 +21,7 @@ export async function voidFile(auth: AuthContext, fileId: string, reason: string
   if (r.length < 3) throw new FileActionError("Give a reason for voiding (it's kept in the audit trail).");
   if (r.length > 500) throw new FileActionError("Keep the reason under 500 characters.");
   const { ip, userAgent } = await requestMeta();
-  return db.transaction(async (tx) => {
+  const out = await db.transaction(async (tx) => {
     const [file] = await tx
       .select()
       .from(schema.files)
@@ -56,6 +58,8 @@ export async function voidFile(auth: AuthContext, fileId: string, reason: string
     }
     return { notified: notified.length };
   });
+  emit({ event: "file.voided", companyId: auth.company.id, fileId, reason: r, baseUrl: await appUrl().catch(() => process.env.APP_URL ?? "") });
+  return out;
 }
 
 export const RESEND_COOLDOWN_MS = 10 * 60_000;

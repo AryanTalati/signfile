@@ -5,6 +5,7 @@ import { recordEmail } from "@/lib/email/outbox";
 import { expiredEmail } from "@/lib/email/templates";
 import { reminderEmailFor, SIGN_KINDS } from "./actions";
 import { automationsEnabled, dueReminder } from "./reminders";
+import { emit } from "@/lib/integrations/dispatch";
 
 /**
  * Time-based automations, run from the /api/health sweep (the uptime pinger hits it every few
@@ -28,6 +29,7 @@ export function sweepAutomations(baseUrl: string) {
   if (!automationsEnabled() || running || Date.now() - lastRun < 60_000) return;
   lastRun = Date.now();
   running = runAutomations({ now: new Date(), baseUrl })
+    .then(() => import("@/lib/integrations/deliveries").then((m) => m.sweepDeliveries()))
     .catch((e) => console.error("automations sweep failed", (e as Error).message))
     .finally(() => {
       running = null;
@@ -64,7 +66,7 @@ async function expireDueFiles(o: { now: Date; baseUrl: string; fileId?: string; 
  * there first. Also used lazily when a link is opened.
  */
 export async function expireFile(fileId: string, now: Date, baseUrl: string) {
-  return db.transaction(async (tx) => {
+  const expired = await db.transaction(async (tx) => {
     const [file] = await tx
       .update(schema.files)
       .set({ status: "expired", updatedAt: now })
@@ -93,8 +95,11 @@ export async function expireFile(fileId: string, now: Date, baseUrl: string) {
       const email = expiredEmail({ brand: company, recipientName: owner.name, documentName: t?.name ?? "the agreement", clientLegalName: file.clientLegalName, waitingOn, fileUrl: `${baseUrl}/files/${fileId}` });
       await recordEmail(tx, { companyId: file.companyId, fileId, kind: "expired", toEmail: owner.email, toName: owner.name, ...email });
     }
-    return true;
+    return file.companyId;
   });
+  if (!expired) return false;
+  emit({ event: "file.expired", companyId: expired, fileId, baseUrl, at: now });
+  return true;
 }
 
 async function sendDueReminders(o: { now: Date; baseUrl: string; fileId?: string; companyId?: string }) {

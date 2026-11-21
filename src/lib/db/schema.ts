@@ -77,6 +77,13 @@ export const companies = pgTable("companies", {
   finalReminderDays: integer("final_reminder_days").notNull().default(2),
   /** IANA time zone, shown next to UTC on certificates. Null = UTC only. */
   timezone: text("timezone"),
+  /** Outgoing webhook (off while null). The secret signs each body (HMAC-SHA256); never logged or shown. */
+  webhookUrl: text("webhook_url"),
+  webhookSecret: text("webhook_secret"),
+  webhookEvents: jsonb("webhook_events").$type<string[]>().notNull().default([]),
+  /** Slack incoming-webhook URL (off while null). */
+  slackWebhookUrl: text("slack_webhook_url"),
+  slackEvents: jsonb("slack_events").$type<string[]>().notNull().default(["file.signed", "file.completed", "file.declined", "file.changes_requested", "file.expired"]),
   createdAt: createdAt(),
 });
 
@@ -312,6 +319,27 @@ export const events = pgTable(
 );
 
 /** Every email the platform sends, recorded before sending. Shown in-app. */
+/** One POST to a firm's webhook or Slack URL. `body` is kept so a retry sends the same bytes. */
+export const deliveries = pgTable(
+  "deliveries",
+  {
+    id: id(),
+    companyId: companyId(),
+    fileId: uuid("file_id").references(() => files.id, { onDelete: "cascade" }),
+    target: text("target").$type<"webhook" | "slack">().notNull(),
+    event: text("event").notNull(),
+    body: text("body").notNull(),
+    status: text("status").$type<"pending" | "delivered" | "failed">().notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: ts("next_attempt_at"),
+    responseStatus: integer("response_status"),
+    error: text("error"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("deliveries_company_idx").on(t.companyId, t.createdAt), index("deliveries_due_idx").on(t.nextAttemptAt).where(sql`${t.status} = 'pending'`)],
+);
+
 export const outbox = pgTable(
   "outbox",
   {

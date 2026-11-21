@@ -1,4 +1,5 @@
 import "server-only";
+import { emit } from "@/lib/integrations/dispatch";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { AuthContext } from "@/lib/auth/session";
@@ -156,5 +157,6 @@ export async function reviseAndResend(
       await recordEmail(tx, { companyId: auth.company.id, fileId, recipientId: r.id, kind: r.active ? "sign_request" : "revision_notice", toEmail: r.email, toName: r.name, ...email });
     }
   });
+  emit({ event: "file.sent", companyId: auth.company.id, fileId, baseUrl });
   return { versionNo };
 }
