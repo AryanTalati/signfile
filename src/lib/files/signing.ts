@@ -156,11 +156,15 @@ export async function markViewed(ctx: SigningContext, meta: { ip: string | null;
 export const CONSENT_TEXT =
   "I agree to use electronic records and signatures for this agreement, and that my electronic signature is the legal equivalent of my handwritten signature. I can ask for a paper copy, and can withdraw this consent before signing by closing this page.";
 
-export async function recordConsent(ctx: SigningContext, meta: { ip: string | null; userAgent: string | null }) {
+/**
+ * Records ESIGN/UETA consent. `inAdvance`: an automatic countersign, where the signer agreed
+ * when they authorized it, so that's the consent time on record.
+ */
+export async function recordConsent(ctx: SigningContext, meta: { ip: string | null; userAgent: string | null }, inAdvance?: { authorizedAt: Date }) {
   if (ctx.state !== "sign") return false;
   if (ctx.recipient.consentAt) return true;
   await db.transaction(async (tx) => {
-    await tx.update(schema.recipients).set({ consentAt: new Date() }).where(eq(schema.recipients.id, ctx.recipient.id));
+    await tx.update(schema.recipients).set({ consentAt: inAdvance?.authorizedAt ?? new Date() }).where(eq(schema.recipients.id, ctx.recipient.id));
     await tx.insert(schema.events).values({
       companyId: ctx.file.companyId,
       fileId: ctx.file.id,
@@ -169,7 +173,7 @@ export async function recordConsent(ctx: SigningContext, meta: { ip: string | nu
       actorId: ctx.recipient.id,
       actorLabel: ctx.recipient.name,
       type: "recipient.consented",
-      data: { text: CONSENT_TEXT },
+      data: inAdvance ? { text: CONSENT_TEXT, inAdvance: true, authorizedAt: inAdvance.authorizedAt.toISOString() } : { text: CONSENT_TEXT },
       ip: meta.ip,
       userAgent: meta.userAgent,
     });
@@ -351,7 +355,7 @@ export async function quickSign(
     else if (f.type === "title" && user.title) values[f.id] = user.title;
     else if (f.required) throw new SigningError(`"${f.label}" needs to be filled in by hand.`);
   }
-  await recordConsent(ctx, meta);
+  await recordConsent(ctx, meta, auto);
   const fresh = await loadSigning(ctx.recipient.token);
   if (!fresh || fresh.state !== "sign") throw new SigningError("This link can't be signed right now.");
   const out = await submitSigning(fresh, { values, timezone }, meta, baseUrl);
@@ -386,7 +390,8 @@ export async function autoCountersign(token: string, baseUrl: string) {
     .where(and(eq(schema.users.id, ctx.recipient.userId), eq(schema.users.companyId, ctx.file.companyId)));
   try {
     if (!u?.sig || !u.autoAt) throw new SigningError("turned off");
-    const meta = { ip: u.ip, userAgent: `Automatic countersign authorized ${u.autoAt.toISOString()}${u.ua ? ` from ${u.ua}` : ""}`.slice(0, 500) };
+    // Recorded with the IP and browser from which they authorized it (the certificate says so).
+    const meta = { ip: u.ip, userAgent: u.ua };
     return await quickSign(ctx, { id: u.id, title: u.title }, { signature: u.sig, initials: u.ini ?? u.sig }, meta, baseUrl, undefined, { authorizedAt: u.autoAt });
   } catch (e) {
     const reason = e instanceof SigningError ? e.message : "unexpected error";

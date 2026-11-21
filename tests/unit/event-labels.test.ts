@@ -27,3 +27,9 @@ test("timeline dates read 'Nov 20, 2026', never ISO", () => {
   assert.match(label, /Nov 20, 2026/);
   assert.doesNotMatch(label, /2026-11-20/);
 });
+
+test("consent given in advance (automatic countersign) says so", () => {
+  const label = eventLabel({ type: "recipient.consented", actorLabel: "Test Admin", data: { inAdvance: true, authorizedAt: "2026-11-20T23:23:03.109Z" } });
+  assert.equal(label, "Test Admin agreed to sign electronically in advance, by authorizing automatic countersign on Nov 20, 2026");
+  assert.equal(eventLabel({ type: "recipient.consented", actorLabel: "Jamie", data: {} }), "Jamie agreed to sign electronically");
+});

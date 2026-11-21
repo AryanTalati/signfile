@@ -8,7 +8,7 @@ import { deleteObjects, getObject, putObject } from "@/lib/storage";
 import { formatFirmValue, formatSignedDate } from "@/lib/fields/format";
 import { signedTitle } from "@/lib/fields/signer-details";
 import { stampAll } from "@/lib/pdf/stamp";
-import { utcAndLocal, validTimeZone } from "@/lib/time";
+import { localStamp, utcAndLocal, utcStamp, validTimeZone } from "@/lib/time";
 import { eventLabel } from "./event-labels";
 
 /**
@@ -67,6 +67,10 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
     const [serif, mono] = await Promise.all([pdf.embedFont(StandardFonts.TimesRoman), pdf.embedFont(StandardFonts.Courier)]);
     await stampAll(pdf, original, doc.pages, doc.fields, values, { font, dingbats, serif, mono });
 
+    // Automatic countersigns: when the signer authorized them (their consent to sign).
+    const autoAuthorized = new Map<string, Date>();
+    for (const e of events)
+      if (e.type === "recipient.auto_countersigned" && e.recipientId && typeof e.data?.authorizedAt === "string") autoAuthorized.set(e.recipientId, new Date(e.data.authorizedAt));
     await appendCertificate(pdf, {
       font,
       bold,
@@ -82,6 +86,7 @@ export async function sealFile(fileId: string, baseUrl: string): Promise<{ final
       documentVersion: doc.versionNo,
       verifyUrl: `${baseUrl}/verify`,
       signers: signers.map((s) => ({
+        autoAuthorizedAt: autoAuthorized.get(s.id) ?? null,
         name: s.name,
         email: s.email,
         title: signedTitle(doc.fields, s.roleKey, s.values ?? {}),
@@ -134,6 +139,8 @@ interface CertSigner {
   consentAt: Date | null;
   viewedAt: Date | null;
   signedAt: Date | null;
+  /** Set for an automatic countersign: when the signer authorized it. */
+  autoAuthorizedAt: Date | null;
   signature?: string;
 }
 
@@ -207,11 +214,21 @@ async function appendCertificate(
     if (s.title) row("Title", s.title);
     // Each signer's own browser time zone; the firm's for signers without one.
     const tz = s.timezone ?? c.firmTimezone;
-    row("Agreed to e-sign", when(s.consentAt, tz));
-    row("Signed", when(s.signedAt, tz));
-    if (tz) row("Time zone", s.timezone ? `${s.timezone} (their browser at signing)` : `${tz} (${c.firm}'s time zone)`);
-    row("IP address", s.ip ?? "not recorded");
-    row("Browser", (s.userAgent ?? "not recorded").slice(0, 220));
+    if (s.autoAuthorizedAt) {
+      // Signed by the system on their standing instruction: say so, and show where and when they gave it.
+      const at = s.autoAuthorizedAt;
+      row("Method", "Automatic countersign using saved signature");
+      row("Authorized", [[localStamp(at, tz), utcStamp(at)].filter(Boolean).join(" / "), `IP ${s.ip ?? "not recorded"}`, `browser ${(s.userAgent ?? "not recorded").slice(0, 200)}`].join(", "));
+      row("Agreed to e-sign", when(at, tz));
+      row("Signed", when(s.signedAt, tz));
+      if (tz) row("Time zone", `${tz} (${c.firm}'s time zone)`);
+    } else {
+      row("Agreed to e-sign", when(s.consentAt, tz));
+      row("Signed", when(s.signedAt, tz));
+      if (tz) row("Time zone", s.timezone ? `${s.timezone} (their browser at signing)` : `${tz} (${c.firm}'s time zone)`);
+      row("IP address", s.ip ?? "not recorded");
+      row("Browser", (s.userAgent ?? "not recorded").slice(0, 220));
+    }
     if (s.signature) {
       const img = await pdf.embedPng(Buffer.from(s.signature.split(",")[1], "base64"));
       const scale = Math.min(180 / img.width, 36 / img.height);

@@ -22,7 +22,10 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
     return to?.name ? `Sent to ${to.name} for signature` : "Sent for signature";
   },
   "recipient.viewed": (e) => `Viewed by ${who(e)}`,
-  "recipient.consented": (e) => `${who(e)} agreed to sign electronically`,
+  "recipient.consented": (e) =>
+    e.data?.inAdvance
+      ? `${who(e)} agreed to sign electronically in advance, by authorizing automatic countersign${str(e.data?.authorizedAt) ? ` on ${shortDate(str(e.data?.authorizedAt))}` : ""}`
+      : `${who(e)} agreed to sign electronically`,
   "recipient.signed": (e) => `Signed by ${who(e)}`,
   "recipient.details_changed": (e) =>
     `${str(e.data?.field) || "Detail"} changed from ${str(e.data?.from) || "(blank)"} to ${str(e.data?.to) || "(blank)"} by ${who(e)}`,
