@@ -32,7 +32,7 @@ Living record of what signfile includes, what it leaves out, and why. Updated wh
 | Create File: template, client legal name, signer, reference, firm-filled values (fee, start date…) | The firm fills the deal-specific details once, and they are stamped into the document. |
 | Signing page: ESIGN/UETA consent, guided next field, draw/type signature, mobile-first | Legally sound consent, and most clients open links on phones. |
 | Sequential signing (client, then firm countersign) | Matches how B2B agreements are executed. |
-| Request changes (comment), decline (reason), forward to the authorized signer | B2B realities. Every one is logged, so there are no dead ends. |
+| Request changes (comment), decline (reason) | B2B realities. Every one is logged, so there are no dead ends. **Forwarding to another signer is deliberately left out** (changed Nov 22): it's the least used, and those handoffs happen outside the signing tool (the recipient tells the firm, which updates the signer). The `forwarded` recipient status and `forwarded_from_id` column exist in the schema, but nothing uses them. |
 | Deterministic seal: stamp values, append audit certificate, SHA-256 of original and final | Tamper evidence and a defensible record without depending on AI or third parties. |
 | File dashboard (status, timeline, resend, void, download, copy link), outbox, public `/verify` | Operators need to see and act on every File. `/verify` lets anyone check a signed PDF. |
 | Owner side of request changes: see the comment, upload a revised agreement as a new template version (fields carried over when pages match), resend on the same File; both versions in the timeline | Legal redlines are the most common B2B outcome. Without this loop, "request changes" would be a dead end. |

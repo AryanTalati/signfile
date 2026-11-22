@@ -68,7 +68,7 @@ Calendar: Phase 1 = Nov 18–20, Phase 2 = Nov 21, Phase 3 = Nov 22, Phase 4 = N
 5. Signing page: ESIGN/UETA consent, guided "next field", draw or type signature, mobile-friendly; client then firm (sequential).
    - **Saved signature (Day 3):** a firm user adopts their signature once in their profile (with ESIGN consent); countersigning is then one click, "Sign with my saved signature", still a human action via their own link.
    - **Per-template signing mode (Day 3):** (a) "Firm countersigns after the client" (default) or (b) "Firm signs when sending": the authorized firm signer applies their saved signature at send time, recorded as their own signing event (consent, IP, UA, timestamp), so the agreement completes and seals the moment the client signs. In (b) the firm is signing order 1 and the client is last. Only the authorized signer can apply their own signature: if someone else sends, the File waits for the signer's one-click approval. Never sign on anyone's behalf automatically. **Exception (Nov 20, user decision): auto-countersign**, a standing instruction the countersigner gives *for their own saved signature* in Settings (explicit consent, off by default, no one can turn it on for someone else); when the last other signer finishes, their signature is applied and the File seals, logged as an automatic countersign with the IP/UA where they authorized it.
-6. Request changes (comment), decline (reason), forward to the right signer (logged). **Owner side of request changes:** owner sees the comment on the File, uploads a revised agreement as a new template version (fields carried over where page count + sizes match; otherwise re-detected and flagged for review), then resends on the **same File** with fresh links. Both versions stay in the timeline.
+6. Request changes (comment), decline (reason). Forwarding to another signer is deliberately left out (least used; handoffs happen outside the tool); the `forwarded` status and `forwarded_from_id` column exist in the schema but nothing uses them. **Owner side of request changes:** owner sees the comment on the File, uploads a revised agreement as a new template version (fields carried over where page count + sizes match; otherwise re-detected and flagged for review), then resends on the **same File** with fresh links. Both versions stay in the timeline.
 7. Seal: stamp values, append audit certificate (File ID, signers, emails, titles, IPs, UAs, timestamps, event log, SHA-256 of original and final), email PDF to all, download in app.
 8. File dashboard: status (incl. expired), timeline, resend, void, download, copy link; outbox page; public `/verify` (upload PDF, check hash).
 9. Edge cases: reject encrypted PDFs clearly; large files; rotated pages; link opened twice; expired/voided links.
@@ -84,7 +84,7 @@ Calendar: Phase 1 = Nov 18–20, Phase 2 = Nov 21, Phase 3 = Nov 22, Phase 4 = N
 **Only if ahead**: approved-answers library (per company + agreement version, `{{fee}}` placeholders, clause hashes → "needs review"), email intake to draft a File, our own MCP server.
 
 ## Deliberately left out
-SMS/WhatsApp, native CRM connectors, Teams/Outlook, Stripe billing, identity verification beyond email link, SSO, autonomous/multi-agent design, n8n/Zapier as core, AI memory of client conversations, AI explaining contract terms to clients, in-app editing of agreement text. Reasons in `DECISIONS.md`. Don't build these.
+SMS/WhatsApp, native CRM connectors, Teams/Outlook, Stripe billing, identity verification beyond email link, SSO, autonomous/multi-agent design, n8n/Zapier as core, AI memory of client conversations, AI explaining contract terms to clients, in-app editing of agreement text, forwarding a File to another signer. Reasons in `DECISIONS.md`. Don't build these.
 
 ## Testing scope
 - Run tests on desktop Chromium only unless a change is specifically mobile-related. No extra browsers, device emulation or screenshot tests by default.
@@ -100,6 +100,18 @@ SMS/WhatsApp, native CRM connectors, Teams/Outlook, Stripe billing, identity ver
 - Client IP: only via `getClientIp()` / `requestMeta()` (Cloudflare's `CF-Connecting-IP` on Render). Never read `X-Forwarded-For` directly: its first entry is client-controlled.
 - Unit tests: `npm run test:unit` (node:test via tsx).
 - Small, frequent commits with clear messages.
-- Repo is **private until submission**. The README's "Submission checklist" (make repo public, last commit before the deadline, etc.) must be done on Nov 25. Remind the user.
+- Repo is **private until submission**. The "Submission checklist" at the end of this file (make repo public, last commit before the deadline, etc.) must be done on Nov 25. Remind the user.
 - README starts with "Test it in 3 minutes" + demo login. Setup steps include setting a monthly spend limit in the Anthropic console.
 - When unsure: make a reasonable decision, write it in `DECISIONS.md`, tell the user.
+
+## Submission checklist (Wed Nov 25, 2026, before 12:40 PM MST)
+
+- [ ] Final commit pushed **before 12:40 PM MST** (19:40 UTC). No commits after.
+- [ ] **Make the GitHub repo public** (Settings → General → Danger Zone → Change visibility).
+- [ ] Live Render URL loads, `/api/health` returns ok, and the uptime pinger is running. If the site hangs while waking, use Render → Manual Deploy → **Restart service**.
+- [ ] Render → Environment has `ENABLE_SWEEP=1` (reminders and expiry run only there) and does **not** have `E2E_HOOKS`. Check: `curl -X POST https://signfile.onrender.com/api/test/automations` returns 404.
+- [ ] Full test path passes on the live URL with a fresh, unseen agreement (desktop + phone).
+- [ ] Demo login in the README works on the live URL.
+- [ ] Anthropic monthly spend limit set.
+- [ ] README "Test it in 3 minutes", DECISIONS.md and the written description are final.
+- [ ] No real personal data in the repo or the live database. To remove an account, find its company id and run `npm run purge:company -- <company-id>` (dry run), then add `--confirm`.
