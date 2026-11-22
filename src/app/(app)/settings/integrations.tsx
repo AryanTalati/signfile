@@ -4,7 +4,7 @@ import { useActionState, useState, useTransition } from "react";
 import { LocalTime } from "@/components/local-time";
 import { Button, Field } from "@/components/ui";
 import { EVENT_NAMES, FILE_EVENTS, type FileEventType } from "@/lib/integrations/events";
-import { type IntegrationState, retryDeliveryAction, saveSlackAction, saveWebhookAction } from "./integrations-actions";
+import { type IntegrationState, retryDeliveryAction, saveMindAction, saveSlackAction, saveWebhookAction } from "./integrations-actions";
 
 function EventBoxes({ selected }: { selected: string[] }) {
   return (
@@ -97,7 +97,7 @@ export function DeliveryLog(p: { rows: { id: string; target: string; event: stri
       {p.rows.map((d) => (
         <li key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-testid="delivery-row" data-status={d.status} data-event={d.event} data-target={d.target}>
           <span className="font-medium">{d.event}</span>
-          <span className="text-muted">{d.target === "slack" ? "Slack" : "Webhook"}</span>
+          <span className="text-muted">{d.target === "slack" ? "Slack" : d.target === "mind" ? "MIND" : "Webhook"}</span>
           <span className={d.status === "failed" ? "text-red-700" : d.status === "delivered" ? "text-green-700" : "text-muted"} data-testid="delivery-status">
             {d.status === "delivered" ? "Delivered" : d.status === "failed" ? `Failed after ${d.attempts} attempt${d.attempts === 1 ? "" : "s"}` : "Sending…"}
             {d.status !== "delivered" && d.error ? ` (${d.error})` : ""}
@@ -113,5 +113,32 @@ export function DeliveryLog(p: { rows: { id: string; target: string; event: stri
         </li>
       ))}
     </ul>
+  );
+}
+
+export function MindForm(p: { hasKey: boolean; enabled: boolean }) {
+  const [state, action, pending] = useActionState<IntegrationState, FormData>(saveMindAction, {});
+  return (
+    <form action={action} className="mt-4 flex flex-col gap-3" data-testid="mind-form">
+      <Field
+        label="MIND API key"
+        id="mind-key"
+        name="key"
+        type="password"
+        autoComplete="off"
+        placeholder={p.hasKey ? "Key saved. Leave blank to keep it" : "mind_…"}
+        hint="In MIND: Settings → Developer → API Keys. Create one just for SignFile so you can revoke it on its own."
+      />
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="enabled" defaultChecked={p.enabled} data-testid="mind-enabled" />
+        Push completed Files to MIND
+      </label>
+      <Status state={state} pending={pending} label="Save MIND" />
+      {p.hasKey && (
+        <button type="submit" name="intent" value="remove" className="self-start text-sm text-red-700 underline">
+          Remove key and turn off
+        </button>
+      )}
+    </form>
   );
 }

@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, lte } from "drizzle-orm";
 import { db, schema } from "@/lib/db/client";
+import { mindAcceptedId, mindDocument, MIND_TOOL, safeMindArgs } from "./mind";
 import { afterAttempt, checkTargetUrl, type EventContext, MAX_ATTEMPTS, pickEvents, retryDelayMs, SIGNATURE_HEADER, signBody, slackText, webhookPayload } from "./core";
 import type { FileEvent, Subscriber } from "./dispatch";
 
@@ -17,7 +18,7 @@ const scale = () => (process.env.E2E_HOOKS === "1" ? 0.002 : 1); // E2E: 60 ms /
 
 async function settings(companyId: string) {
   const [c] = await db
-    .select({ webhookUrl: schema.companies.webhookUrl, webhookSecret: schema.companies.webhookSecret, webhookEvents: schema.companies.webhookEvents, slackUrl: schema.companies.slackWebhookUrl, slackEvents: schema.companies.slackEvents })
+    .select({ webhookUrl: schema.companies.webhookUrl, webhookSecret: schema.companies.webhookSecret, webhookEvents: schema.companies.webhookEvents, slackUrl: schema.companies.slackWebhookUrl, slackEvents: schema.companies.slackEvents, mindKey: schema.companies.mindApiKey, mindEnabled: schema.companies.mindEnabled })
     .from(schema.companies)
     .where(eq(schema.companies.id, companyId));
   return c;
@@ -39,12 +40,21 @@ async function loadContext(e: Evt): Promise<EventContext | null> {
     .where(and(eq(schema.files.id, e.fileId), eq(schema.files.companyId, e.companyId)));
   if (!row) return null;
   const f = row.file;
-  const [signers, [t]] = await Promise.all([
+  const [signers, [t], [doc]] = await Promise.all([
     f.currentDocumentId
       ? db.select().from(schema.recipients).where(and(eq(schema.recipients.documentId, f.currentDocumentId), eq(schema.recipients.companyId, e.companyId))).orderBy(asc(schema.recipients.signingOrder))
       : Promise.resolve([]),
     f.templateId ? db.select({ name: schema.templates.name }).from(schema.templates).where(eq(schema.templates.id, f.templateId)) : Promise.resolve([]),
+    // Agreement version + the key terms the AI review read from it (MIND sync).
+    f.currentDocumentId
+      ? db
+          .select({ versionNo: schema.fileDocuments.versionNo, detection: schema.templateVersions.detection })
+          .from(schema.fileDocuments)
+          .leftJoin(schema.templateVersions, eq(schema.templateVersions.id, schema.fileDocuments.templateVersionId))
+          .where(and(eq(schema.fileDocuments.id, f.currentDocumentId), eq(schema.fileDocuments.companyId, e.companyId)))
+      : Promise.resolve([]),
   ]);
+  const ai = (doc?.detection as { ai?: { status?: string; terms?: EventContext["terms"] } } | null)?.ai;
   const live = signers.filter((s) => s.status !== "revoked" && s.status !== "forwarded");
   const who = e.recipientId ? signers.find((s) => s.id === e.recipientId) : undefined;
   const last = [...live].reverse().find((s) => s.status === "signed");
@@ -59,10 +69,14 @@ async function loadContext(e: Evt): Promise<EventContext | null> {
     // A signer's own download link: it seals on demand, so it works as soon as the File completes.
     signedPdfUrl: e.event === "file.completed" && last ? `${e.baseUrl}/api/sign/${last.token}/download` : null,
     reason: e.reason ?? null,
+    version: doc?.versionNo ?? null,
+    terms: ai?.status === "ok" ? (ai.terms ?? null) : null,
+    fileUrl: `${e.baseUrl}/files/${f.id}`,
+    verifyUrl: `${e.baseUrl}/verify`,
   };
 }
 
-async function enqueue(e: Evt, target: "webhook" | "slack", build: (ctx: EventContext, id: string) => string) {
+async function enqueue(e: Evt, target: "webhook" | "slack" | "mind", build: (ctx: EventContext, id: string) => string) {
   if (e.batch) return enqueueBody(e, target, (id) => (target === "webhook" ? JSON.stringify(bulkPayload(e, id)) : JSON.stringify({ text: bulkSlackText(e) })));
   const ctx = await contextFor(e);
   if (!ctx) return;
@@ -71,7 +85,7 @@ async function enqueue(e: Evt, target: "webhook" | "slack", build: (ctx: EventCo
   await attempt(id);
 }
 
-async function enqueueBody(e: Evt, target: "webhook" | "slack", build: (id: string) => string) {
+async function enqueueBody(e: Evt, target: "webhook" | "slack" | "mind", build: (id: string) => string) {
   const id = crypto.randomUUID();
   await db.insert(schema.deliveries).values({ id, companyId: e.companyId, fileId: null, target, event: e.event, body: build(id), nextAttemptAt: e.at });
   await attempt(id);
@@ -91,6 +105,14 @@ export const webhookSubscriber: Subscriber = async (e) => {
   await enqueue(e, "webhook", (ctx, id) => JSON.stringify(webhookPayload(ctx, id)));
 };
 
+/** MIND sync: each completed File becomes one private document in the firm's MIND graph. Off unless the firm turned it on. */
+export const mindSubscriber: Subscriber = async (e) => {
+  if (e.event !== "file.completed" || !e.fileId) return;
+  const c = await settings(e.companyId);
+  if (!c?.mindEnabled || !c.mindKey) return;
+  await enqueue(e, "mind", (ctx) => JSON.stringify(mindDocument(ctx)));
+};
+
 export const slackSubscriber: Subscriber = async (e) => {
   const c = await settings(e.companyId);
   if (!c?.slackUrl || !pickEvents(c.slackEvents).includes(e.event)) return;
@@ -102,13 +124,19 @@ export async function attempt(id: string, opts: { final?: boolean } = {}) {
   const [d] = await db.select().from(schema.deliveries).where(eq(schema.deliveries.id, id));
   if (!d || d.status !== "pending") return;
   const c = await settings(d.companyId);
-  const url = d.target === "webhook" ? c?.webhookUrl : c?.slackUrl;
-  const checked = url ? checkTargetUrl(url, d.target, allowLocal()) : { error: "No URL is set." };
+  const url = d.target === "webhook" ? c?.webhookUrl : d.target === "slack" ? c?.slackUrl : mindUrl();
+  const checked = url ? (d.target === "mind" ? { url } : checkTargetUrl(url, d.target, allowLocal())) : { error: "No URL is set." };
 
   let ok = false;
   let responseStatus: number | null = null;
   let error: string | null = null;
   if ("error" in checked) error = checked.error;
+  else if (d.target === "mind") {
+    const r = await pushToMind(checked.url, c?.mindEnabled ? c.mindKey : null, d.body);
+    ok = r.ok;
+    responseStatus = r.ok ? 200 : null;
+    error = r.error;
+  }
   else if (d.target === "webhook" && !c?.webhookSecret) error = "No signing secret is set.";
   else {
     const headers: Record<string, string> = { "content-type": "application/json", "user-agent": "SignFile-Webhooks/1" };
@@ -168,3 +196,32 @@ export async function listDeliveries(companyId: string, limit = 20) {
 }
 
 export { MAX_ATTEMPTS };
+
+// ---------- MIND ----------
+
+/** MIND's remote MCP server. MIND_MCP_URL overrides it only for the E2E test image (a local mock). */
+const mindUrl = () => (process.env.E2E_HOOKS === "1" && process.env.MIND_MCP_URL) || "https://www.m-i-n-d.ai/mcp";
+
+/** One mind_remember create over MCP (remote HTTP, Bearer key). "Accepted with an id" = delivered; indexing isn't awaited. */
+async function pushToMind(url: string, key: string | null, body: string): Promise<{ ok: boolean; error: string | null }> {
+  if (!key) return { ok: false, error: "MIND sync is off or has no API key" };
+  const args = safeMindArgs(JSON.parse(body));
+  if (!args) return { ok: false, error: "Nothing to send" };
+  const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+  const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
+  const transport = new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: { Authorization: `Bearer ${key}` } } });
+  const client = new Client({ name: "signfile", version: "1.0.0" });
+  try {
+    await client.connect(transport, { timeout: 20_000 });
+    const res = await client.callTool({ name: MIND_TOOL, arguments: { ...args } }, undefined, { timeout: 20_000 });
+    const text = (res.content as { type: string; text?: string }[]).map((x) => x.text ?? "").join("\n");
+    if (res.isError) return { ok: false, error: `MIND: ${text.slice(0, 160)}` };
+    return mindAcceptedId(text) ? { ok: true, error: null } : { ok: false, error: "MIND didn't return an id" };
+  } catch (e) {
+    // Never the key: only the error kind and a short message.
+    const err = e as { name?: string; code?: number; message?: string };
+    return { ok: false, error: `${err.name ?? "Error"}${err.code ? ` ${err.code}` : ""}: ${(err.message ?? "").replace(/mind_[A-Za-z0-9_-]+/g, "mind_[key]").slice(0, 120)}` };
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}

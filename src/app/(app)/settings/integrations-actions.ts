@@ -52,6 +52,27 @@ export async function saveSlackAction(_: IntegrationState, fd: FormData): Promis
   return { ok: true };
 }
 
+/** MIND sync: a firm's own MIND API key and an on/off switch. Blank key keeps the saved one. Never sent back to the page. */
+export async function saveMindAction(_: IntegrationState, fd: FormData): Promise<IntegrationState> {
+  const auth = await requireAdmin();
+  if (fd.get("intent") === "remove") {
+    await db.update(schema.companies).set({ mindApiKey: null, mindEnabled: false }).where(eq(schema.companies.id, auth.company.id));
+    revalidatePath("/settings");
+    return { ok: true };
+  }
+  const key = String(fd.get("key") ?? "").trim();
+  const enabled = fd.get("enabled") === "on";
+  if (key && !/^mind_[A-Za-z0-9_-]{8,200}$/.test(key)) return { error: "That doesn't look like a MIND API key (it starts with mind_)." };
+  const [cur] = await db.select({ key: schema.companies.mindApiKey }).from(schema.companies).where(eq(schema.companies.id, auth.company.id));
+  if (enabled && !key && !cur?.key) return { error: "Paste your MIND API key to turn MIND sync on." };
+  await db
+    .update(schema.companies)
+    .set({ mindEnabled: enabled, ...(key ? { mindApiKey: key } : {}) })
+    .where(eq(schema.companies.id, auth.company.id));
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
 export async function retryDeliveryAction(id: string) {
   const auth = await requireAdmin();
   if (!/^[0-9a-f-]{36}$/.test(id)) return;

@@ -83,6 +83,9 @@ export const companies = pgTable("companies", {
   webhookEvents: jsonb("webhook_events").$type<string[]>().notNull().default([]),
   /** Slack incoming-webhook URL (off while null). */
   slackWebhookUrl: text("slack_webhook_url"),
+  /** MIND sync: completed Files pushed into the firm's MIND knowledge graph (off by default). Key never shown back or logged. */
+  mindApiKey: text("mind_api_key"),
+  mindEnabled: boolean("mind_enabled").notNull().default(false),
   slackEvents: jsonb("slack_events").$type<string[]>().notNull().default(["file.signed", "file.completed", "file.declined", "file.changes_requested", "file.expired"]),
   createdAt: createdAt(),
 });
@@ -387,7 +390,7 @@ export const deliveries = pgTable(
     id: id(),
     companyId: companyId(),
     fileId: uuid("file_id").references(() => files.id, { onDelete: "cascade" }),
-    target: text("target").$type<"webhook" | "slack">().notNull(),
+    target: text("target").$type<"webhook" | "slack" | "mind">().notNull(),
     event: text("event").notNull(),
     body: text("body").notNull(),
     status: text("status").$type<"pending" | "delivered" | "failed">().notNull().default("pending"),

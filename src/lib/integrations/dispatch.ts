@@ -39,5 +39,5 @@ export function createDispatcher(load: () => Promise<Subscriber[]> | Subscriber[
 /** Subscribers: outgoing webhook and Slack (loaded lazily so emitters don't import them). */
 export const emit = createDispatcher(async () => {
   const m = await import("./deliveries");
-  return [m.webhookSubscriber, m.slackSubscriber];
+  return [m.webhookSubscriber, m.slackSubscriber, m.mindSubscriber];
 });

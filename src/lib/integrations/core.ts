@@ -55,6 +55,11 @@ export interface EventContext {
   signer: { name: string; email: string } | null;
   signedPdfUrl: string | null;
   reason: string | null;
+  /** Agreement version the File is on, key terms read from it (MIND sync). */
+  version?: number | null;
+  terms?: Record<string, { found: boolean; value: string | null } | undefined> | null;
+  fileUrl?: string;
+  verifyUrl?: string;
 }
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);

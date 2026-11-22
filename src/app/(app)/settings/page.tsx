@@ -7,7 +7,7 @@ import { AutoCountersign } from "./auto-countersign";
 import { DetailsForm } from "./details-form";
 import { SignatureSettings } from "./signature-settings";
 import { RemindersForm } from "./reminders-form";
-import { DeliveryLog, SlackForm, WebhookForm } from "./integrations";
+import { DeliveryLog, MindForm, SlackForm, WebhookForm } from "./integrations";
 import { listDeliveries } from "@/lib/integrations/deliveries";
 import { db, schema } from "@/lib/db/client";
 import { eq, sql } from "drizzle-orm";
@@ -32,6 +32,8 @@ export default async function SettingsPage() {
         webhookEvents: schema.companies.webhookEvents,
         slackUrl: schema.companies.slackWebhookUrl,
         slackEvents: schema.companies.slackEvents,
+        hasMindKey: sql<boolean>`${schema.companies.mindApiKey} is not null`,
+        mindEnabled: schema.companies.mindEnabled,
       })
       .from(schema.companies)
       .where(eq(schema.companies.id, auth.company.id)),
@@ -71,6 +73,13 @@ export default async function SettingsPage() {
             <h2 className="font-semibold">Slack</h2>
             <p className="mt-1 text-sm text-muted">Off until you save a URL. One short message per event in the channel you chose in Slack.</p>
             <SlackForm url={company.slackUrl} events={company.slackEvents ?? []} />
+          </Card>
+          <Card className="p-5" data-testid="mind-card">
+            <h2 className="font-semibold">MIND</h2>
+            <p className="mt-1 text-sm text-muted">
+              Off until you turn it on. When a File is signed by everyone, SignFile saves one private document to your MIND knowledge graph: the client, agreement and version, the key terms, who signed and when, and links to the File and the verify page. No signer emails or phone numbers. MIND picks out the details itself.
+            </p>
+            <MindForm hasKey={company.hasMindKey} enabled={company.mindEnabled} />
           </Card>
           <Card className="p-5">
             <h2 className="font-semibold">Recent deliveries</h2>
