@@ -587,6 +587,19 @@ export function FieldEditor(props: EditorProps) {
               Create a File with this template
             </ButtonLink>
           )}
+          {problems.length === 0 && !props.reviseFile && (
+            <ButtonLink
+              href={`/templates/${props.templateId}/bulk`}
+              variant="secondary"
+              className="mb-2 w-full"
+              onClick={(e) => {
+                e.preventDefault();
+                void finish(`/templates/${props.templateId}/bulk`);
+              }}
+            >
+              Bulk send from CSV
+            </ButtonLink>
+          )}
           {props.reviseFile && (
             <a
               href={`/files/${props.reviseFile.id}/revise?template=${props.templateId}`}

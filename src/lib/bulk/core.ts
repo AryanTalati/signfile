@@ -229,3 +229,8 @@ export function headerTemplateCsv(cols: Column[]): string {
 export function resultCsv(headers: string[], rows: { cells: string[]; status: string; link: string; reason: string }[]): string {
   return toCsv([[...headers, "file_status", "file_link", "skip_reason"], ...rows.map((r) => [...headers.map((_, i) => r.cells[i] ?? ""), r.status, r.link, r.reason])]);
 }
+
+/** "18 sent, 1 draft, 2 skipped" (failed only when there are any). */
+export function batchSummary(c: Record<string, number>) {
+  return [`${c.sent ?? 0} sent`, ...(c.draft ? [`${c.draft} draft${c.draft === 1 ? "" : "s"}`] : []), `${c.skipped ?? 0} skipped`, ...(c.failed ? [`${c.failed} failed`] : [])].join(", ");
+}
