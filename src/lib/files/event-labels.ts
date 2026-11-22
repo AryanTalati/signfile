@@ -18,7 +18,7 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
   "company.created": (e) => `Company created by ${who(e)}`,
   "file.created": (e) => {
     const n = Number(e.data?.aiConfirmedFields ?? 0);
-    return `File created by ${who(e)}${n ? ` (${n} AI-suggested field${n === 1 ? "" : "s"}, each confirmed by a person)` : ""}`;
+    return `File created by ${who(e)}${e.data?.bulkBatchId ? " (bulk send from CSV)" : ""}${n ? ` (${n} AI-suggested field${n === 1 ? "" : "s"}, each confirmed by a person)` : ""}`;
   },
   "file.sent": (e) => {
     const to = e.data?.to as { name?: string } | undefined;
@@ -48,6 +48,8 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
   "file.voided": (e) => `Voided by ${who(e)}${str(e.data?.reason) ? `: ${str(e.data?.reason)}` : ""}`,
   "file.resent": (e) => `Signing email resent to ${str(e.data?.to) || "the signer"} by ${who(e)}`,
   "template.created": (e) => `Template created by ${who(e)}`,
+  "bulk.started": (e) => `Bulk send from CSV started by ${who(e)}: ${Number(e.data?.toSend ?? 0)} to send, ${Number(e.data?.skipped ?? 0)} skipped`,
+  "bulk.completed": (e) => `Bulk send finished: ${Number(e.data?.sent ?? 0)} sent, ${Number(e.data?.draft ?? 0)} drafts, ${Number(e.data?.skipped ?? 0)} skipped, ${Number(e.data?.failed ?? 0)} failed`,
   "template.ai_reviewed": (e) => `AI review of the agreement: ${Number(e.data?.agreed ?? 0)} fields agreed with the rules, ${Number(e.data?.flagged ?? 0) + Number(e.data?.added ?? 0)} flagged for a person to check`,
   "template.ai_suggestion_confirmed": (e) => `${who(e)} confirmed an AI-suggested ${str(e.data?.label) || "field"}${e.data?.changed ? " (after changing it)" : ""}`,
   "template.signature_page_appended": (e) => `Signature page added by ${who(e)}`,

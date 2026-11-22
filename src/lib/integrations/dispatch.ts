@@ -10,7 +10,10 @@ export interface FileEvent {
   /** Integration event name (not an audit-log event type). */
   event: FileEventType;
   companyId: string;
-  fileId: string;
+  /** null for run-level events (bulk.completed). */
+  fileId: string | null;
+  /** bulk.completed: the run and its counts. */
+  batch?: { id: string; templateName: string; counts: Record<string, number>; resultUrl: string };
   /** The signer the event is about, if any. */
   recipientId?: string | null;
   /** Free text from the signer (decline reason, requested changes). */

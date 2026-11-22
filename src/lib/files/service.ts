@@ -63,7 +63,13 @@ export async function listCountersigners(auth: AuthContext) {
 }
 
 /** Creates a File from a template (snapshot, signers, links) and, unless saved as a draft, sends it. */
-export async function createAndSendFile(auth: AuthContext, input: CreateFileInput, baseUrl: string) {
+export async function createAndSendFile(
+  auth: AuthContext,
+  input: CreateFileInput,
+  baseUrl: string,
+  /** Bulk send: runs inside the File's own transaction (marks the CSV row done atomically with the File). */
+  opts: { inTx?: (tx: Tx, fileId: string) => Promise<void>; bulkBatchId?: string } = {},
+) {
   const t = await getTemplate(auth, input.templateId);
   if (!t) throw new FileInputError("That template no longer exists.", "templateId");
   const v = t.version;
@@ -183,8 +189,10 @@ export async function createAndSendFile(auth: AuthContext, input: CreateFileInpu
         draft: !input.sendNow,
         // Fields the AI review proposed or disputed, each confirmed by a person before this File.
         aiConfirmedFields: v.fields.filter((f) => f.ai && f.reviewed).length,
+        ...(opts.bulkBatchId ? { bulkBatchId: opts.bulkBatchId } : {}),
       },
     });
+    if (opts.inTx) await opts.inTx(tx, fileId);
     if (input.sendNow) await dispatch(tx, auth, fileId, baseUrl, { skipFirmEmail: signNow });
   });
   if (input.sendNow) emit({ event: "file.sent", companyId: auth.company.id, fileId, baseUrl });

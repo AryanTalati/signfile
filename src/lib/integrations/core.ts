@@ -103,5 +103,7 @@ export function slackText(c: EventContext) {
       return `${doc} was voided`;
     case "file.expired":
       return `Signing links for ${doc} expired`;
+    default:
+      return `${doc}: ${c.type}`;
   }
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
@@ -20,8 +21,17 @@ export interface AuthContext {
   sessionId: string;
 }
 
+/**
+ * Work done outside a request on someone's behalf (a bulk send they confirmed) records the IP
+ * and user agent from which they confirmed it.
+ */
+const metaOverride = new AsyncLocalStorage<{ ip: string | null; userAgent: string | null }>();
+export const withRequestMeta = <T>(meta: { ip: string | null; userAgent: string | null }, fn: () => Promise<T>) => metaOverride.run(meta, fn);
+
 /** Client IP (see getClientIp) and user agent, for sessions, the throttle and audit events. */
 export async function requestMeta() {
+  const o = metaOverride.getStore();
+  if (o) return o;
   const h = await headers();
   return { ip: getClientIp(h), userAgent: h.get("user-agent")?.slice(0, 500) ?? null };
 }

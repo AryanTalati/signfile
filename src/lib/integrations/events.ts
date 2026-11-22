@@ -1,5 +1,5 @@
 /** Integration event names. No Node imports: used by the Settings page in the browser too. */
-export const FILE_EVENTS = ["file.sent", "file.viewed", "file.signed", "file.completed", "file.declined", "file.changes_requested", "file.voided", "file.expired"] as const;
+export const FILE_EVENTS = ["file.sent", "file.viewed", "file.signed", "file.completed", "file.declined", "file.changes_requested", "file.voided", "file.expired", "bulk.completed"] as const;
 export type FileEventType = (typeof FILE_EVENTS)[number];
 
 export const EVENT_NAMES: Record<FileEventType, string> = {
@@ -11,6 +11,7 @@ export const EVENT_NAMES: Record<FileEventType, string> = {
   "file.changes_requested": "Changes requested",
   "file.voided": "Voided",
   "file.expired": "Expired",
+  "bulk.completed": "Bulk send finished (counts)",
 };
 
 export const DEFAULT_SLACK_EVENTS: FileEventType[] = ["file.signed", "file.completed", "file.declined", "file.changes_requested", "file.expired"];

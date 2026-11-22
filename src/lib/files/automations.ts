@@ -30,6 +30,7 @@ export function sweepAutomations(baseUrl: string) {
   lastRun = Date.now();
   running = runAutomations({ now: new Date(), baseUrl })
     .then(() => import("@/lib/integrations/deliveries").then((m) => m.sweepDeliveries()))
+    .then(() => import("@/lib/bulk/worker").then((m) => m.resumeBatches()))
     .catch((e) => console.error("automations sweep failed", (e as Error).message))
     .finally(() => {
       running = null;

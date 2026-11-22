@@ -31,6 +31,7 @@ function contextFor(e: Evt) {
   return p;
 }
 async function loadContext(e: Evt): Promise<EventContext | null> {
+  if (!e.fileId) return null;
   const [row] = await db
     .select({ file: schema.files, firm: schema.companies.name })
     .from(schema.files)
@@ -62,12 +63,27 @@ async function loadContext(e: Evt): Promise<EventContext | null> {
 }
 
 async function enqueue(e: Evt, target: "webhook" | "slack", build: (ctx: EventContext, id: string) => string) {
+  if (e.batch) return enqueueBody(e, target, (id) => (target === "webhook" ? JSON.stringify(bulkPayload(e, id)) : JSON.stringify({ text: bulkSlackText(e) })));
   const ctx = await contextFor(e);
   if (!ctx) return;
   const id = crypto.randomUUID();
   await db.insert(schema.deliveries).values({ id, companyId: e.companyId, fileId: e.fileId, target, event: e.event, body: build(ctx, id), nextAttemptAt: e.at });
   await attempt(id);
 }
+
+async function enqueueBody(e: Evt, target: "webhook" | "slack", build: (id: string) => string) {
+  const id = crypto.randomUUID();
+  await db.insert(schema.deliveries).values({ id, companyId: e.companyId, fileId: null, target, event: e.event, body: build(id), nextAttemptAt: e.at });
+  await attempt(id);
+}
+
+/** bulk.completed: one event for the whole run, so an external system can react to it. */
+const bulkPayload = (e: Evt, id: string) => ({ id, type: e.event, occurredAt: e.at.toISOString(), batch: { id: e.batch!.id, template: e.batch!.templateName, counts: e.batch!.counts, resultCsvUrl: e.batch!.resultUrl } });
+const bulkSlackText = (e: Evt) => {
+  const c = e.batch!.counts;
+  const parts = [`${c.sent ?? 0} sent`, ...(c.draft ? [`${c.draft} saved as drafts`] : []), `${c.skipped ?? 0} skipped`, ...(c.failed ? [`${c.failed} failed`] : [])];
+  return `Bulk send of '${e.batch!.templateName}' finished: ${parts.join(", ")}`;
+};
 
 export const webhookSubscriber: Subscriber = async (e) => {
   const c = await settings(e.companyId);
