@@ -8,12 +8,15 @@ type Result = { sha256: string; result: "sealed" | "unsigned_original" | "no_mat
 export function VerifyForm({ initial = null }: { initial?: Result | null }) {
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<Result | null>(initial);
+  // Opened via /verify?file=<id>: the result describes the File, not a copy the viewer has.
+  const [fromLink, setFromLink] = useState(!!initial);
   const [error, setError] = useState<string | null>(null);
   async function check(f: File | undefined) {
     if (!f) return;
     setBusy(true);
     setError(null);
     setRes(null);
+    setFromLink(false);
     const body = new FormData();
     body.append("file", f);
     const r = await fetch("/api/verify", { method: "POST", body });
@@ -35,12 +38,13 @@ export function VerifyForm({ initial = null }: { initial?: Result | null }) {
       {res?.result === "sealed" && (
         <Alert tone="success">
           <p className="font-medium" data-testid="verify-result">
-            Verified: this is an unaltered signed copy.
+            {fromLink ? "This File was sealed by signfile." : "Verified: this is an unaltered signed copy."}
           </p>
           <p className="mt-1 text-sm">
             Sealed by signfile for {res.firm} on {res.completedAt ? new Date(res.completedAt).toUTCString() : ""}, signed by {res.signers} part{res.signers === 1 ? "y" : "ies"}.
           </p>
           <p className="mt-1 break-all font-mono text-xs">SHA-256 {res.sha256}</p>
+          {fromLink && <p className="mt-1 text-sm">To check a copy you have, upload it here. It matches if its SHA-256 is the same.</p>}
         </Alert>
       )}
       {res?.result === "unsigned_original" && (
