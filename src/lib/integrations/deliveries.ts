@@ -72,7 +72,7 @@ async function loadContext(e: Evt): Promise<EventContext | null> {
     version: doc?.versionNo ?? null,
     terms: ai?.status === "ok" ? (ai.terms ?? null) : null,
     fileUrl: `${e.baseUrl}/files/${f.id}`,
-    verifyUrl: `${e.baseUrl}/verify`,
+    verifyUrl: `${e.baseUrl}/verify?file=${f.id}`, // shows this File's verification directly
   };
 }
 

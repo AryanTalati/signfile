@@ -29,7 +29,11 @@ export function mindDocument(c: EventContext): MindArgs {
     ...(c.file.reference ? [`Reference: ${c.file.reference}`] : []),
   ];
   // Key terms read from the agreement, each only if it was found (never guessed).
-  for (const [k, t] of Object.entries(c.terms ?? {})) if (t?.found && t.value) lines.push(`${TERM_LABELS[k] ?? k}: ${t.value}`);
+  for (const [k, t] of Object.entries(c.terms ?? {})) {
+    if (!t?.found || !t.value) continue;
+    const value = k === "parties" ? nameParties(t.value, c.file.clientLegalName) : k === "effective_date" ? effectiveDate(t.value, c.file.completedAt) : t.value;
+    lines.push(`${TERM_LABELS[k] ?? k}: ${value}`);
+  }
   // Signers by name and role, with the date each signed. No emails or phone numbers.
   for (const s of c.signers) lines.push(`${s.role === "firm" ? "Countersigned" : "Signed"} by ${s.name} (${s.role === "firm" ? c.firm : c.file.clientLegalName})${day(s.signedAt) ? ` on ${day(s.signedAt)}` : ""}`);
   if (c.file.completedAt) lines.push(`Completed: ${day(c.file.completedAt)}`);
@@ -43,6 +47,22 @@ export function mindDocument(c: EventContext): MindArgs {
     tags: ["signfile", "agreement"],
     source: "signfile",
   };
+}
+
+/**
+ * "Lumen Cloud Software Inc. (Vendor) and Customer" -> "... and Northwind Analytics LLC (Customer)":
+ * a bare generic role gets the File's client name. Left alone if the name is already there.
+ */
+export function nameParties(text: string, client: string): string {
+  if (!client || text.toLowerCase().includes(client.toLowerCase())) return text;
+  // The role word on its own: not already in parentheses, not part of a name ("Customer Corp").
+  return text.replace(/(?<![(\w"“'‘])(?:the\s+)?(Customer|Client|Company)(?![\w)"”'’])(?!\s+(?:Inc|LLC|Ltd|Corp|Co)\b)/i, (_m, role: string) => `${client} (${role[0].toUpperCase()}${role.slice(1).toLowerCase()})`);
+}
+
+/** "Date of the last signature" (and similar) on a completed File -> "2026-11-22 (date of the last signature)". */
+export function effectiveDate(value: string, completedAt: Date | null): string {
+  if (!completedAt || !/last (signature|party|signatory|to sign)|(fully|last) (executed|signed)|date of (full )?execution|when (both|all) parties (have )?signed|signed by (both|all) parties/i.test(value)) return value;
+  return `${day(completedAt)} (date of the last signature)`;
 }
 
 /** Defence in depth: whatever is stored, only a private document create is ever sent. */

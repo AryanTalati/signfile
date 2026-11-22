@@ -5,9 +5,9 @@ import { Alert, Button, Card } from "@/components/ui";
 
 type Result = { sha256: string; result: "sealed" | "unsigned_original" | "no_match"; firm?: string; completedAt?: string; signers?: number };
 
-export function VerifyForm() {
+export function VerifyForm({ initial = null }: { initial?: Result | null }) {
   const [busy, setBusy] = useState(false);
-  const [res, setRes] = useState<Result | null>(null);
+  const [res, setRes] = useState<Result | null>(initial);
   const [error, setError] = useState<string | null>(null);
   async function check(f: File | undefined) {
     if (!f) return;
@@ -50,7 +50,14 @@ export function VerifyForm() {
           </p>
         </Alert>
       )}
-      {res?.result === "no_match" && (
+      {res?.result === "no_match" && !res.sha256 && (
+        <Alert>
+          <p className="font-medium" data-testid="verify-result">
+            No sealed document matches this link. Upload the signed PDF to check it.
+          </p>
+        </Alert>
+      )}
+      {res?.result === "no_match" && !!res.sha256 && (
         <Alert>
           <p className="font-medium" data-testid="verify-result">
             No match. This file isn&apos;t a document sealed by signfile, or it has been changed.

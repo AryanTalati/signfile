@@ -55,3 +55,35 @@ test("accepted with an id (status PROCESSING) counts as delivered", () => {
   assert.equal(mindAcceptedId('{"id":"81df4a04","status":"PROCESSING"}'), "81df4a04");
   assert.equal(mindAcceptedId("Error: MIND API error 401"), null);
 });
+
+test("parties: a bare generic role gets the client's name; a named party is left alone", async () => {
+  const { nameParties } = await import("../../src/lib/integrations/mind");
+  const client = "Northwind Analytics LLC";
+  assert.equal(nameParties("Lumen Cloud Software Inc. (Vendor) and Customer", client), "Lumen Cloud Software Inc. (Vendor) and Northwind Analytics LLC (Customer)");
+  assert.equal(nameParties("Astra AI (Provider) and the Client", client), "Astra AI (Provider) and Northwind Analytics LLC (Client)");
+  assert.equal(nameParties("Lumen Cloud Software Inc. (Vendor) and Northwind Analytics LLC (Customer)", client), "Lumen Cloud Software Inc. (Vendor) and Northwind Analytics LLC (Customer)");
+  assert.equal(nameParties('Acme Corp (the "Company") and Jane Example', client), 'Acme Corp (the "Company") and Jane Example'); // role already defined, in quotes
+  assert.equal(nameParties("Customer Corp and Vendor Inc", client), "Customer Corp and Vendor Inc"); // part of a name
+});
+
+test("effective date 'date of the last signature' becomes the completion date on a completed File", async () => {
+  const { effectiveDate } = await import("../../src/lib/integrations/mind");
+  const done = new Date("2026-11-22T18:59:00Z");
+  assert.equal(effectiveDate("Date of the last signature", done), "2026-11-22 (date of the last signature)");
+  assert.equal(effectiveDate("the date on which it is signed by both parties", done), "2026-11-22 (date of the last signature)");
+  assert.equal(effectiveDate("Date of the last signature", null), "Date of the last signature"); // not complete: as written
+  assert.equal(effectiveDate("November 1, 2026", done), "November 1, 2026");
+});
+
+test("the payload uses them, keeps 'Firm:', and links to this File's verification", () => {
+  const d = mindDocument({
+    ...ctx,
+    terms: { parties: { found: true, value: "Lumen Cloud Software Inc. (Vendor) and Customer" }, effective_date: { found: true, value: "Date of the last signature" } },
+    file: { ...ctx.file, clientLegalName: "Northwind Analytics LLC" },
+    verifyUrl: "https://app.example/verify?file=f1",
+  });
+  assert.ok(d.content.includes("Parties: Lumen Cloud Software Inc. (Vendor) and Northwind Analytics LLC (Customer)"));
+  assert.ok(d.content.includes("Effective date: 2026-11-22 (date of the last signature)"));
+  assert.ok(d.content.includes("Firm: Astra AI"));
+  assert.ok(d.content.includes("Verify the signed PDF: https://app.example/verify?file=f1"));
+});
