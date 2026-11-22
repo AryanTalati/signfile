@@ -1,0 +1,7 @@
+client_legal_name,signer_name,signer_email,signer_title,reference,external_id
+Acme Test Holdings LLC,Ann Example,ann@example.com,COO,JOB-101,CRM-1
+Bolt Test Industries Inc,Bo Example,bo@example.com,,JOB-102,CRM-2
+Cobalt Test Partners Ltd,Cy Example,cy@example.com,Managing Director,JOB-103,CRM-3
+Delta Test Co,Di Example,not-an-email,,JOB-104,CRM-4
+,Ed Example,ed@example.com,,JOB-105,CRM-5
+Acme Test Holdings LLC,Ann Example,ann@example.com,COO,JOB-101,CRM-1
