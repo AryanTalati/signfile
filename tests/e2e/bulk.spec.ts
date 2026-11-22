@@ -97,3 +97,15 @@ test("Validate only creates nothing: no Files, no emails, no run in history; the
   await page.goto("/bulk");
   await expect(page.getByTestId("batch-history-row")).toHaveCount(0);
 });
+
+test("a CSV can be chosen with the styled button; its name is shown", async ({ page }) => {
+  await signupFresh(page, "E2E Bulk Co");
+  await openBulk(page);
+  await expect(page.getByText("Choose CSV file")).toBeVisible();
+  await expect(page.getByTestId("csv-name")).toHaveText("or drop it here");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByText("Choose CSV file").click();
+  await (await chooser).setFiles({ name: "clients.csv", mimeType: "text/csv", buffer: SAMPLE });
+  await expect(page.getByTestId("csv-name")).toHaveText("clients.csv");
+  await expect(page.getByTestId("mapping")).toBeVisible();
+});

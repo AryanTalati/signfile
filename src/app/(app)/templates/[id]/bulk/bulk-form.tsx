@@ -20,6 +20,7 @@ export function BulkForm({ templateId, columns }: { templateId: string; columns:
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   async function onFile(f: File | undefined) {
     setPreview(null);
@@ -78,11 +79,30 @@ export function BulkForm({ templateId, columns }: { templateId: string; columns:
 
   return (
     <div className="flex flex-col gap-4">
-      <Card className="flex flex-col gap-3 p-5">
-        <label className="text-sm font-medium" htmlFor="bulk-csv">
-          CSV file
-        </label>
-        <input id="bulk-csv" type="file" accept=".csv,text/csv" onChange={(e) => void onFile(e.target.files?.[0])} data-testid="bulk-upload" className="text-sm" />
+      <Card
+        className={`flex flex-col gap-3 p-5 transition ${dragging ? "border-brand bg-brand/5" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          void onFile(e.dataTransfer.files?.[0]);
+        }}
+        data-testid="csv-drop"
+      >
+        <p className="text-sm font-medium">CSV file</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="cursor-pointer rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium transition hover:border-neutral-400 focus-within:ring-2 focus-within:ring-brand/30">
+            Choose CSV file
+            <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => void onFile(e.target.files?.[0])} data-testid="bulk-upload" />
+          </label>
+          <span className="min-w-0 truncate text-sm text-muted" data-testid="csv-name">
+            {csv ? csv.name : "or drop it here"}
+          </span>
+        </div>
         {csv && (
           <div className="mt-2" data-testid="mapping">
             <p className="text-sm font-medium">Match your CSV columns</p>
