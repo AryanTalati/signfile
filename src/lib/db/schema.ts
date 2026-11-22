@@ -323,6 +323,47 @@ export const events = pgTable(
 );
 
 /** Every email the platform sends, recorded before sending. Shown in-app. */
+/** A confirmed bulk send from a CSV (one File per valid row). */
+export const bulkBatches = pgTable(
+  "bulk_batches",
+  {
+    id: id(),
+    companyId: companyId(),
+    templateId: uuid("template_id").references(() => templates.id, { onDelete: "set null" }),
+    templateName: text("template_name").notNull(),
+    createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    filename: text("filename").notNull(),
+    headers: jsonb("headers").$type<string[]>().notNull(),
+    sendNow: boolean("send_now").notNull().default(true),
+    status: text("status").$type<"running" | "completed">().notNull().default("running"),
+    counts: jsonb("counts").$type<Record<string, number>>().notNull().default({}),
+    meta: jsonb("meta").$type<{ ip: string | null; userAgent: string | null }>().notNull().default({ ip: null, userAgent: null }),
+    createdAt: createdAt(),
+    finishedAt: ts("finished_at"),
+  },
+  (t) => [index("bulk_batches_company_idx").on(t.companyId, t.createdAt)],
+);
+
+/** One CSV line of a bulk batch, and what happened to it. */
+export const bulkRows = pgTable(
+  "bulk_rows",
+  {
+    id: id(),
+    companyId: companyId(),
+    batchId: uuid("batch_id").notNull().references(() => bulkBatches.id, { onDelete: "cascade" }),
+    rowNo: integer("row_no").notNull(),
+    rowKey: text("row_key").notNull(),
+    clientLegalName: text("client_legal_name").notNull().default(""),
+    cells: jsonb("cells").$type<string[]>().notNull(),
+    values: jsonb("values").$type<Record<string, unknown>>().notNull(),
+    status: text("status").$type<"pending" | "sent" | "draft" | "skipped" | "failed">().notNull(),
+    reason: text("reason"),
+    fileId: uuid("file_id").references(() => files.id, { onDelete: "set null" }),
+    processedAt: ts("processed_at"),
+  },
+  (t) => [uniqueIndex("bulk_rows_batch_row_uq").on(t.batchId, t.rowNo), index("bulk_rows_key_idx").on(t.companyId, t.rowKey)],
+);
+
 /** One AI review call (per-company daily cap + token usage). No agreement text. */
 export const aiUsage = pgTable(
   "ai_usage",
