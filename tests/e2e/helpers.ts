@@ -95,6 +95,7 @@ export const PLACEHOLDER_HINTS = [/Date added when you sign/i, /Filled in when e
 
 export async function expectNoPlaceholdersInDocument(page: Page) {
   // Overlays sit inside the page containers; their visible text is what would look like document content.
+  await expect(page.locator("[data-page]").first(), "no document pages found to check").toBeVisible(); // otherwise it checks nothing
   const texts = await page.locator("[data-page]").allInnerTexts();
   for (const t of texts) for (const re of PLACEHOLDER_HINTS) expect(t, `placeholder text in document: ${re}`).not.toMatch(re);
 }

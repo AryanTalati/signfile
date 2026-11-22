@@ -14,6 +14,16 @@ Or create your own company at `/signup`.
 
 > **Use test data only.** This is a demo deployment. Don't enter real names, real email addresses, or real client agreements, whether at signup, as signers, or in uploaded documents. Use made-up names and addresses on a reserved test domain such as `@example.com`. Emails show up in the in-app **Outbox**, so you never need a real inbox to test the full flow.
 
+## MIND sync
+
+When a File completes, SignFile can save it as one private document in the firm's MIND (off by default; each firm adds its own MIND API key in **Settings**). The document carries the client, agreement version, key terms, signers and dates, and a link to `/verify`. It never sends signer emails or phone numbers. Why it works this way: see `DECISIONS.md`.
+
+![A signed File saved as a private document in MIND.](docs/mind-document.png)
+*A signed File saved as a private document in MIND.*
+
+![MIND answering a question about the agreement, citing the SignFile document as its source.](docs/mind-chat.png)
+*MIND answering a question about the agreement, citing the SignFile document as its source.*
+
 ## Development
 
 ```bash

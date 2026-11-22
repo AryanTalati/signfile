@@ -148,7 +148,7 @@ test("high-confidence fields are accepted silently; a low-confidence one shows o
   await expect(page.getByTestId("field")).toHaveCount(10);
   const items = page.getByTestId("review-list").getByTestId("flagged-item");
   await expect(items).toHaveCount(2);
-  for (const n of await items.getByTestId("confirm-note").allInnerTexts()) expect(n).toBe("Please confirm this field");
+  await expect(items.getByTestId("confirm-note")).toHaveText(["Please confirm this field", "Please confirm this field"]);
   await field(page, "client", "company").click();
   await expect(page.getByTestId("inspector").getByTestId("confirm-note")).toHaveText("Please confirm this field.");
   expect(await page.locator("main").innerText()).not.toMatch(DEBUG);
@@ -162,9 +162,11 @@ test("flagged fields: the status area has no counts, just plain wording and each
   await expect(page.getByTestId("ready")).toHaveText("✓ Ready to send");
   await expect(page.getByTestId("review-list").getByRole("heading")).toHaveText("Check the highlighted fields before sending");
   const COUNT = /\b\d+\s*(fields?|to review|to confirm|for you|need)/i;
+  const banner = page.getByRole("status").filter({ hasText: "We found the signature fields" });
+  await expect(banner).toBeVisible();
   const status = [
     await page.getByTestId("review-list").getByRole("heading").innerText(),
-    await page.getByRole("status").first().innerText().catch(() => ""), // upload banner
+    await banner.innerText(), // upload banner
     await page.getByTestId("ready").innerText(),
     await page.getByTestId("firm-count").innerText(),
   ].join(" | ");
