@@ -31,13 +31,14 @@ export async function uploadAgreement(page: Page, file: string) {
 }
 
 /** Uploads a fixture, creates and sends a File, returns the client's signing link. */
-export async function sendFile(page: Page, fixture = "fixtures/agreements/pdf-two-column.pdf", client: { company: string; name: string; email: string; title?: string } = { company: "Globex Test Industries Ltd", name: "Jamie Example", email: "jamie@example.com" }) {
+export async function sendFile(page: Page, fixture = "fixtures/agreements/pdf-two-column.pdf", client: { company: string; name: string; email: string; title?: string; cc?: string } = { company: "Globex Test Industries Ltd", name: "Jamie Example", email: "jamie@example.com" }) {
   await uploadAgreement(page, fixture);
   await page.getByRole("link", { name: "Create a File with this template" }).click();
   await page.getByLabel("Client's legal name").fill(client.company);
   await page.getByLabel("Name", { exact: true }).fill(client.name);
   await page.getByLabel("Email").fill(client.email);
   if (client.title) await page.getByLabel("Title (optional)").fill(client.title);
+  if (client.cc) await page.getByLabel("Send the signed copy to (optional)").fill(client.cc);
   // Any "Filled by you" values the template needs (fee, dates…).
   for (const input of await page.locator('input[name^="firm:"]').all()) await input.fill("2026-11-19");
   await page.getByRole("button", { name: "Send for signature" }).click();

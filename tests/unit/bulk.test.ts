@@ -12,10 +12,10 @@ test("columns come from the template's own fields", () => {
   const cols = columnsFor(fields);
   assert.deepEqual(
     cols.map((c) => c.key),
-    ["client_legal_name", "signer_name", "signer_email", "signer_title", "reference", "external_id", "monthly_fee", "start_date", "notes"],
+    ["client_legal_name", "signer_name", "signer_email", "signer_title", "reference", "external_id", "cc_emails", "monthly_fee", "start_date", "notes"],
   );
   assert.deepEqual(cols.find((c) => c.key === "start_date")!.target, { kind: "firm", firmKey: "start", date: true });
-  assert.equal(headerTemplateCsv(cols).split("\r\n")[0], "client_legal_name,signer_name,signer_email,signer_title,reference,external_id,monthly_fee,start_date,notes");
+  assert.equal(headerTemplateCsv(cols).split("\r\n")[0], "client_legal_name,signer_name,signer_email,signer_title,reference,external_id,cc_emails,monthly_fee,start_date,notes");
 });
 
 test("CSV parsing: quotes, escaped quotes, commas and newlines in cells, CRLF, BOM, blank lines", () => {

@@ -3,6 +3,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { db, schema } from "@/lib/db/client";
 import { recordEmail } from "@/lib/email/outbox";
+import { signedCopyCcEmail } from "@/lib/email/templates";
 import { sha256 } from "@/lib/pdf/prepare";
 import { deleteObjects, getObject, putObject } from "@/lib/storage";
 import { formatFirmValue, formatSignedDate } from "@/lib/fields/format";
@@ -146,6 +147,20 @@ async function emailSignedCopy(
       attachments: [{ filename: `${o.documentName} - signed.pdf`.replace(/[^\w .()-]+/g, "_"), storageKey: o.finalKey }],
     });
   }
+  // "Send the signed copy to": the same email and PDF, no link (they have no signing token).
+  const cc = o.file.ccEmails ?? [];
+  if (!cc.length) return;
+  const mail = signedCopyCcEmail({ documentName: o.documentName, firm: o.firm, clientLegalName: o.file.clientLegalName });
+  for (const to of cc)
+    await recordEmail(tx, {
+      companyId: o.file.companyId,
+      fileId: o.file.id,
+      kind: "signed_copy_cc",
+      toEmail: to,
+      ...mail,
+      attachments: [{ filename: `${o.documentName} - signed.pdf`.replace(/[^\w .()-]+/g, "_"), storageKey: o.finalKey }],
+    });
+  await tx.insert(schema.events).values({ companyId: o.file.companyId, fileId: o.file.id, actorType: "system", type: "file.signed_copy_cc", data: { to: cc } });
 }
 
 export async function getFinalPdf(file: { finalPdfKey: string | null }) {

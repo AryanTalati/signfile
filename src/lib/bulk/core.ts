@@ -2,6 +2,7 @@
  * Bulk send from a CSV: the pure parts (columns for a template, CSV parsing, header mapping,
  * row validation, idempotency keys, the result CSV). Used by the server and the browser.
  */
+import { parseCcEmails } from "@/lib/files/cc";
 import { isoDate } from "@/lib/ai/term-offers";
 import { isDateFill } from "@/lib/fields/format";
 import type { FieldDef } from "@/lib/fields/types";
@@ -14,7 +15,7 @@ export interface Column {
   label: string;
   required: boolean;
   /** Where the value goes: a File field, or a "Filled by you" key. */
-  target: { kind: "file"; field: "clientLegalName" | "signerName" | "signerEmail" | "signerTitle" | "reference" | "externalId" } | { kind: "firm"; firmKey: string; date: boolean };
+  target: { kind: "file"; field: "clientLegalName" | "signerName" | "signerEmail" | "signerTitle" | "reference" | "externalId" | "ccEmails" } | { kind: "firm"; firmKey: string; date: boolean };
 }
 
 const slug = (s: string) =>
@@ -33,6 +34,7 @@ export function columnsFor(fields: FieldDef[]): Column[] {
     { key: "signer_title", label: "Signer title", required: false, target: { kind: "file", field: "signerTitle" } },
     { key: "reference", label: "Reference", required: false, target: { kind: "file", field: "reference" } },
     { key: "external_id", label: "External ID", required: false, target: { kind: "file", field: "externalId" } },
+    { key: "cc_emails", label: "Send signed copy to", required: false, target: { kind: "file", field: "ccEmails" } },
   ];
   const seen = new Set(cols.map((c) => c.key));
   for (const f of fields) {
@@ -100,6 +102,7 @@ const ALIASES: Record<string, string[]> = {
   signer_title: ["title", "jobtitle", "position", "role"],
   reference: ["ref", "jobnumber", "projectnumber", "matter"],
   external_id: ["id", "externalid", "crmid", "clientid", "customerid"],
+  cc_emails: ["cc", "ccemail", "ccemails", "copyto", "sendsignedcopyto"],
 };
 
 /** CSV header index for each column (or -1): exact key, label, or a common alias. */
@@ -127,6 +130,8 @@ export interface RowValues {
   signerTitle: string;
   reference: string;
   externalId: string;
+  /** "Send the signed copy to", normalized ("a@x.com, b@y.com"); may be missing on rows saved before it existed. */
+  ccEmails?: string;
   firmValues: Record<string, string>;
 }
 
@@ -162,7 +167,7 @@ export function validateRows(
   return rows.map((cells, i) => {
     const rowNo = i + 1;
     const get = (c: Column) => (mapping[c.key] >= 0 ? (cells[mapping[c.key]] ?? "").trim() : "");
-    const values: RowValues = { clientLegalName: "", signerName: "", signerEmail: "", signerTitle: "", reference: "", externalId: "", firmValues: {} };
+    const values: RowValues = { clientLegalName: "", signerName: "", signerEmail: "", signerTitle: "", reference: "", externalId: "", ccEmails: "", firmValues: {} };
     const reasons: string[] = [];
     for (const c of cols) {
       let v = get(c);
@@ -174,6 +179,13 @@ export function validateRows(
         if (c.target.field === "signerEmail") {
           v = v.toLowerCase();
           if (v && !EMAIL.test(v)) reasons.push(`"${v}" isn't a valid email`);
+        }
+        if (c.target.field === "ccEmails") {
+          const cc = parseCcEmails(v);
+          if ("error" in cc) reasons.push(`${c.label}: ${cc.error.replace(/\.$/, "")}`);
+          else v = cc.emails.join(", ");
+          values.ccEmails = v;
+          continue;
         }
         const max = c.target.field === "clientLegalName" ? 200 : 120;
         if (v.length > max) reasons.push(`${c.label} is longer than ${max} characters`);
@@ -221,6 +233,7 @@ export function headerTemplateCsv(cols: Column[]): string {
     signer_title: "Operations Director",
     reference: "JOB-001",
     external_id: "CRM-1001",
+    cc_emails: "legal@example.com",
   };
   return toCsv([cols.map((c) => c.key), cols.map((c) => example[c.key] ?? (c.target.kind === "firm" && c.target.date ? "2026-12-01" : ""))]);
 }

@@ -4,6 +4,8 @@ import { emit } from "@/lib/integrations/dispatch";
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import { ccEmailsField } from "./cc";
+import { type FilesQuery, filesWhere, waitingOnSql } from "./list-filter";
 import type { AuthContext } from "@/lib/auth/session";
 import { requestMeta } from "@/lib/auth/session";
 import { db, schema } from "@/lib/db/client";
@@ -35,6 +37,8 @@ export const createFileSchema = z.object({
   /** Off: the File is saved as a Draft (no links, no emails) and sent later from its page. Default on (CSV/API). */
   sendNow: z.boolean().optional().default(true),
   firmValues: z.record(z.string(), z.string().trim().max(500)).default({}),
+  /** "Send the signed copy to": up to 5 non-signers who get the signed copy on completion. */
+  ccEmails: ccEmailsField,
 });
 export type CreateFileInput = z.infer<typeof createFileSchema>;
 
@@ -125,6 +129,7 @@ export async function createAndSendFile(
       reference: input.reference || null,
       clientLegalName: input.clientLegalName,
       firmValues,
+      ccEmails: input.ccEmails ?? [],
       status: "draft",
     });
     await tx.insert(schema.fileDocuments).values({
@@ -308,7 +313,8 @@ export async function listAwaitingMe(auth: AuthContext) {
     .limit(50);
 }
 
-export async function listFiles(auth: AuthContext) {
+/** The 200 most recent Files matching the search and status filter, always within this company. */
+export async function listFiles(auth: AuthContext, query: FilesQuery = { q: "", status: "all" }) {
   return db
     .select({
       id: schema.files.id,
@@ -318,11 +324,11 @@ export async function listFiles(auth: AuthContext) {
       sentAt: schema.files.sentAt,
       updatedAt: schema.files.updatedAt,
       templateName: schema.templates.name,
-      waitingOn: sql<string | null>`(select r.role_key from recipients r where r.file_id = ${schema.files.id} and r.document_id = ${schema.files.currentDocumentId} and r.status in ('active','viewed') order by r.signing_order limit 1)`,
+      waitingOn: waitingOnSql,
     })
     .from(schema.files)
     .leftJoin(schema.templates, eq(schema.templates.id, schema.files.templateId))
-    .where(eq(schema.files.companyId, auth.company.id))
+    .where(filesWhere(auth.company.id, query))
     .orderBy(desc(schema.files.createdAt))
     .limit(200);
 }

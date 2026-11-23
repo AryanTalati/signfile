@@ -131,6 +131,18 @@ export function NewFileForm(props: {
         </Card>
       )}
 
+      <Card className="flex flex-col gap-4 p-5">
+        <Field
+          label="Send the signed copy to (optional)"
+          name="ccEmails"
+          autoComplete="off"
+          defaultValue={v.ccEmails}
+          error={fe.ccEmails}
+          placeholder="legal@client.example, finance@client.example"
+          hint="Up to 5 emails, separated by commas. They don't sign; they get the signed PDF when everyone has signed."
+        />
+      </Card>
+
       <label className="flex items-start gap-3 text-sm" data-testid="send-now">
         <input type="checkbox" name="sendNow" checked={sendNow} onChange={(e) => setSendNow(e.target.checked)} className="mt-1" />
         <span>

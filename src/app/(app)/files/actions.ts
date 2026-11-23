@@ -31,6 +31,7 @@ export async function createFileAction(_: CreateFileState, fd: FormData): Promis
     signNow: values.signNow === "on",
     sendNow: values.sendNow === "on",
     firmValues,
+    ccEmails: values.ccEmails,
   });
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};

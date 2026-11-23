@@ -42,6 +42,7 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
     `Revised version ${String(e.data?.toVersion ?? "")} sent by ${who(e)}; version ${String(e.data?.fromVersion ?? "")} superseded${str(e.data?.note) ? `. What changed: ${str(e.data?.note)}` : ""}`,
   "file.completed": () => "All parties signed",
   "file.sealed": () => "Signed PDF sealed with its certificate",
+  "file.signed_copy_cc": (e) => `Signed copy sent to ${Array.isArray(e.data?.to) ? (e.data.to as string[]).join(", ") : "the people copied"}`,
   "file.expired": () => "Signing links expired",
   "file.extended": (e) => `Links extended and resent by ${who(e)}`,
   "file.reminded": (e) => `Reminder sent to ${str(e.data?.to) || "the signer"}`,

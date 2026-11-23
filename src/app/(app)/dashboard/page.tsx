@@ -4,14 +4,18 @@ import { Alert, ButtonLink, Card } from "@/components/ui";
 import { FileStatus } from "@/components/files/status";
 import { requireAuth } from "@/lib/auth/session";
 import { listAwaitingMe, listFiles } from "@/lib/files/service";
+import { parseFilesQuery, STATUS_FILTERS } from "@/lib/files/list-filter";
 
 export const metadata: Metadata = { title: "Files · signfile" };
 
-export default async function Dashboard({ searchParams }: { searchParams: Promise<{ welcome?: string }> }) {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ welcome?: string; q?: string; status?: string }> }) {
   const auth = await requireAuth();
   const { user, company } = auth;
-  const { welcome } = await searchParams;
-  const [files, awaiting] = await Promise.all([listFiles(auth), listAwaitingMe(auth)]);
+  const params = await searchParams;
+  const { welcome } = params;
+  const query = parseFilesQuery(params);
+  const filtering = !!query.q || query.status !== "all";
+  const [files, awaiting] = await Promise.all([listFiles(auth, query), listAwaitingMe(auth)]);
   return (
     <div className="flex flex-col gap-6">
       {welcome && <Alert tone="success">Welcome to signfile, {user.name.split(" ")[0]}. {company.name} is set up.</Alert>}
@@ -39,7 +43,41 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           </ul>
         </Card>
       )}
-      {files.length === 0 ? (
+      {(filtering || files.length > 0) && (
+        <form method="get" action="/dashboard" role="search" className="flex flex-wrap items-end gap-2" data-testid="files-filter">
+          <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+            <span className="font-medium">Search</span>
+            <input
+              type="search"
+              name="q"
+              defaultValue={query.q}
+              placeholder="Client, agreement, signer, email or reference"
+              className="rounded-lg border border-border bg-surface px-3 py-2 text-base sm:text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Status</span>
+            <select name="status" defaultValue={query.status} className="rounded-lg border border-border bg-surface px-3 py-2 text-base sm:text-sm">
+              {STATUS_FILTERS.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:bg-neutral-50">
+            Search
+          </button>
+        </form>
+      )}
+      {files.length === 0 && filtering ? (
+        <Card className="p-10 text-center" data-testid="no-match">
+          <p className="font-medium">No Files match</p>
+          <Link href="/dashboard" className="mt-2 inline-block text-sm underline">
+            Clear filters
+          </Link>
+        </Card>
+      ) : files.length === 0 ? (
         <Card className="p-10 text-center">
           <p className="font-medium">No Files yet</p>
           <p className="mt-1 text-sm text-muted">Upload your client agreement as a template, then create a File to send it.</p>

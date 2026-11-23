@@ -66,6 +66,11 @@ export default async function FilePage({ params, searchParams }: { params: Promi
             " · Not sent yet"
           )}
         </p>
+        {file.ccEmails.length > 0 && (
+          <p className="mt-1 text-sm text-muted" data-testid="cc-emails">
+            Signed copy also goes to {file.ccEmails.join(", ")}
+          </p>
+        )}
       </div>
 
       {file.status === "completed" && (

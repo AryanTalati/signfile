@@ -9,6 +9,7 @@ const KIND_LABEL: Record<string, string> = {
   countersign_request: "Countersign request",
   firm_sign_first: "Sign to send",
   signed_copy: "Signed copy",
+  signed_copy_cc: "Signed copy (copied)",
   resend: "Signing request (resent)",
   voided: "Agreement voided",
   reminder: "Reminder",

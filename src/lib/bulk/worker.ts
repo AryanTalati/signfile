@@ -81,6 +81,7 @@ async function runBatch(batchId: string) {
             signNow: false,
             sendNow: batch.sendNow,
             firmValues: v.firmValues,
+            ccEmails: v.ccEmails ? v.ccEmails.split(", ") : [],
           },
           baseUrl,
           {

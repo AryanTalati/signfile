@@ -35,7 +35,7 @@ test("valid rows become sent Files, bad rows are skipped with reasons, the resul
   await openBulk(page);
   // The header row for this template (no "Filled by you" fields: signer columns only).
   const tpl = await page.request.get((await page.getByTestId("csv-template").getAttribute("href"))!);
-  expect(parseCsv(await tpl.text())[0]).toEqual(["client_legal_name", "signer_name", "signer_email", "signer_title", "reference", "external_id"]);
+  expect(parseCsv(await tpl.text())[0]).toEqual(["client_legal_name", "signer_name", "signer_email", "signer_title", "reference", "external_id", "cc_emails"]);
 
   await uploadCsv(page);
   expect(await statuses(page)).toEqual(["ready", "ready", "ready", "invalid", "invalid", "duplicate"]);

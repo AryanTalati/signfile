@@ -213,6 +213,8 @@ export const files = pgTable(
     clientLegalName: text("client_legal_name").notNull(),
     /** Values the firm fills when creating the File (fee, start date, address...), keyed by firm_fill_key. */
     firmValues: jsonb("firm_values").$type<Record<string, string>>().notNull().default({}),
+    /** "Send the signed copy to": people who get the signed-copy email but don't sign. */
+    ccEmails: text("cc_emails").array().notNull().default([]),
     status: fileStatus("status").notNull().default("draft"),
     /** The document version currently out for signature. */
     currentDocumentId: uuid("current_document_id"),

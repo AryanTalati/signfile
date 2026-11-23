@@ -142,3 +142,12 @@ ${button(o.brand, o.fileUrl, "Open the File")}`,
   const text = `The signing links for "${o.documentName}" for ${o.clientLegalName} expired before everyone signed.${o.waitingOn ? ` It was waiting on ${o.waitingOn}.` : ""}\n\nOpen the File to extend it and resend the link, or void it: ${o.fileUrl}`;
   return { subject, html, text };
 }
+
+/** The signed-copy email for someone on "Send the signed copy to": same message as signers get, PDF attached, no signing link. */
+export function signedCopyCcEmail(o: { documentName: string; firm: string; clientLegalName: string }) {
+  return {
+    subject: `Signed: "${o.documentName}"`,
+    html: `<p>Hello,</p><p>Everyone has signed <strong>${esc(o.documentName)}</strong> (${esc(o.firm)} and ${esc(o.clientLegalName)}). ${esc(o.firm)} asked us to send you the signed copy: it's attached, with its certificate of completion.</p>`,
+    text: `Everyone has signed "${o.documentName}" (${o.firm} and ${o.clientLegalName}). ${o.firm} asked us to send you the signed copy: it's attached, with its certificate of completion.`,
+  };
+}
