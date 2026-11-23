@@ -42,13 +42,10 @@ Living record of what signfile includes, what it leaves out, and why. Updated wh
 | Template + fields snapshotted into each File at send | Editing a template later must never change an agreement already sent. |
 
 ### Phase 2: automation and integration surface
-CSV bulk create, REST API with hashed API keys, HMAC-signed webhooks, scheduled same-thread reminders that stop and notify the owner, Claude-assisted field labeling with confidence flags, Gmail send-as-firm and reply reading. *Why:* the brief says "automates it on every file". API + webhooks let any CRM integrate without us building connectors.
+CSV bulk send (preview, validation, idempotent rows, background run, result CSV), HMAC-signed outgoing webhooks, Slack notifications, a MIND sync on completion, scheduled reminders and link expiry (per-firm schedule, owner emailed on expiry, "Extend and resend"), Claude-assisted review of new agreements (fields and key terms, uncertain fields flagged for a person), and email delivery through the Gmail API. *Why:* the brief says "automates it on every file". Webhooks let any other system react to a File without us building one connector per tool.
 
-### Phase 3: reply handling with the owner in control
-AI classifies replies (question, wants to talk, sign later, decline, out-of-office, unclear). Code routes each class. Every outbound message needs owner approval. Calendar slots are owner-approved. Drive archive and Slack notifications. *Why:* the slow part of manual signing is the back-and-forth, and firms will only trust it if they approve every message.
-
-### Phase 4: product completeness
-MIND sync on completion, onboarding checklist, pricing page (no billing), data export and per-client deletion, help page, E2E tests. *Why:* "close to a product a company could buy and run today".
+### Phase 3: product completeness
+Drafts and "Send now", revised versions on the same File, auto-countersign per person, a firm time zone on the certificate, and a public `/verify` that also takes a File link (`/verify?file=<id>`). E2E tests cover the full path on desktop and phone. *Why:* "close to a product a company could buy and run today".
 
 ### Engineering decisions
 | Decision | Why |
@@ -75,11 +72,11 @@ MIND sync on completion, onboarding checklist, pricing page (no billing), data e
 | Saves carry the PDF's hash; the server rejects a save made against an older PDF, and autosave pauses during "append a signature page" | Found by E2E: an in-flight autosave of the empty field list could land after the append and wipe the new signature-page fields. |
 | Signup transaction uses `lock_timeout = 5s` and retries | A signup must fail fast and retry, never hang on another transaction's lock. |
 | Uploads are processed **one at a time** (3 may wait; more get "busy", which the upload page retries automatically for ~1 min), and abandoned uploads stop processing | Render free has 0.1 CPU. A live E2E run with 9 parallel workers queued so much conversion/parsing work that even logins timed out for an hour, while abandoned uploads kept running. Queueing keeps the site responsive for everyone. A grader uploading one document is unaffected. Live tests run with 2 workers; local/Docker runs keep full parallelism. |
-| Signers always sign for themselves; no automatic signing on a company's behalf. Firm signing is fast instead: a **saved signature** (adopted once, with consent) and a per-template mode, **"Firm countersigns after the client"** (default) or **"Firm signs when sending"** (the authorized signer applies their saved signature at send time, logged as their own signing event, so the agreement completes when the client signs) | ESIGN/UETA require the signer's intent at the time of signing. An unattended company signature is weak evidence and something a client's legal team would push back on. Both modes keep a person in the loop while removing the countersign delay. Planned for Day 3. |
+| Signers always sign for themselves; no automatic signing on a company's behalf. Firm signing is fast instead: a **saved signature** (adopted once, with consent) and a per-template mode, **"Firm countersigns after the client"** (default) or **"Firm signs when sending"** (the authorized signer applies their saved signature at send time, logged as their own signing event, so the agreement completes when the client signs) | ESIGN/UETA require the signer's intent at the time of signing. An unattended company signature is weak evidence and something a client's legal team would push back on. Both modes keep a person in the loop while removing the countersign delay. Built Nov 19 (see the rows below). |
 | **Body-text date blanks** (empty blank next to "as of", "dated", "date of", "Effective Date", "this ___ day of") become a date field at 0.60 confidence, always flagged for review. If "Effective Date" is mentioned it's the new **Agreement date** type (no signer: filled automatically with the date the last party signs); otherwise **Filled by you**. "this __ day of ____" is one field. "Date: ___" inside a signature block stays that signer's *date signed* | Real agreements carry the agreement date in the body, not in the signature block. Defaulting to automatic for the Effective Date means it can't be left blank or mistyped. Medium confidence because the wording varies, so a person confirms it. |
 | **Filled blanks get no field**: a blank with a separate text item sitting on it (within ~7 pt of the line, covering ≥30% of it) is treated as filled; drawn lines with text on them were already treated as occupied | Seen on a real DocuSign-produced NDA, where the Effective Date was typed over its blank: adding a field there would overwrite a value the parties already agreed. The window is tight so the previous line of text (~12+ pt above) never counts, a regression caught by the eval. Fixtures: `pdf-date-blanks.pdf`, `pdf-prefilled-blanks.pdf`, `docx-filled-date.docx` (made-up names). |
 | Signing links expire after **30 days** (per-company setting `link_expiry_days`) | Long enough for a client's legal review; short enough that a forgotten link doesn't stay live forever. An expired link shows a branded page with the firm's name and how to get a new one. |
-| **Outbox-only email for now** (no provider key): every email is recorded in the outbox as "Not sent (outbox only)", and the signing link is shown on the File page right after sending | The test path and grading can't depend on email delivery. A Resend key (and later Gmail send-as-firm) switches the same outbox rows to real delivery without changing the flow. Decided Nov 19. |
+| ~~**Outbox-only email for now**~~ **Superseded (Nov 20) by Gmail sending** (see "Email via the Gmail API" below). Originally: every email was recorded in the outbox as "Not sent (outbox only)", and the signing link is shown on the File page right after sending | The test path and grading can't depend on email delivery. The outbox and the in-app link stay; Gmail now delivers the same outbox rows. Decided Nov 19. |
 | Sending snapshots the template's PDF (copied into the File's own storage folder) and fields into `file_documents` v1 | Template edits after sending never change an agreement already out for signature. |
 | Signing page: link token is the only credential; ESIGN/UETA consent recorded (text, time, IP, UA) before the document is shown; the date signed is set by the server in the signer's browser time zone; submit is row-locked so a link opened twice or a double click can't sign twice; every non-signable state (signed, waiting, completed, expired, voided, replaced, declined, changes requested) has its own branded page | Each signing has to be defensible as evidence and never dead-end. `/sign/*` sends `Referrer-Policy: no-referrer` and `noindex` so tokens can't leak via Referer or search engines. |
 | Signers type or draw; typed signatures render in a handwriting font to a PNG; once adopted, other signature/initials fields fill with one tap | Fast on a phone and still one deliberate action per field. |
@@ -136,7 +133,7 @@ MIND sync on completion, onboarding checklist, pricing page (no billing), data e
 | **One event dispatcher** (`src/lib/integrations/dispatch.ts`): `emit()` is called after each write commits (sent, viewed, signed per signer, completed, declined, changes requested, voided, expired) and returns at once; subscribers (webhook, Slack) run in the background and their errors are only logged | Integrations must never block or break signing. A plain in-process call is enough at our size; Inngest can replace the transport later without touching the emit sites. |
 | **Outgoing webhook**: one URL + secret per firm, chosen events, JSON POST signed with HMAC-SHA256 of the raw body in `X-SignFile-Signature: sha256=…`. Each POST is a `deliveries` row (body kept, so a retry sends the same bytes); 3 attempts (now, +30 s, +5 min), then Failed, with a manual Retry (one more attempt) in Settings. Timers live in-process; the health sweep re-attempts any overdue after a restart | Firms can verify the sender and see what was delivered. The secret is stored to sign (never shown back, never logged). |
 | Webhook/Slack URLs must be https and not private/loopback hosts; Slack must be `hooks.slack.com` | Stops the app being pointed at internal services (SSRF). The E2E receiver is allowed only with `E2E_HOOKS=1`. |
-| `file.completed` carries the last signer's download link (`/api/sign/<token>/download`) as the signed-PDF link | It seals on demand, so it works the moment the event fires; it's the same link signers already get by email. A firm API key download comes with the REST API. |
+| `file.completed` carries the last signer's download link (`/api/sign/<token>/download`) as the signed-PDF link | It seals on demand, so it works the moment the event fires; it's the same link signers already get by email. |
 | **Slack** via an incoming-webhook URL the firm pastes, plain-text one-liners, default events signed/completed/declined/changes requested/expired. No OAuth app, no channel picker | Five-minute setup for any firm; the channel is chosen in Slack when creating the webhook. |
 | Both off by default (no URL saved). Deliveries are deleted with their File (cascade), so per-client deletion still removes everything | Nothing leaves the app unless an admin turns it on; deletion stays one path. |
 | If auto-countersign can't apply (turned off meanwhile, a firm field that needs typing), the countersigner gets the normal "please countersign" email and the timeline says why | Never a dead end; never a guess. |
@@ -145,12 +142,12 @@ MIND sync on completion, onboarding checklist, pricing page (no billing), data e
 | The certificate's **Title** is the one the signer entered in their Title field in the signed document; no Title field = no title on the certificate | The File-form or profile title can contradict the signed document (a profile "CEO" vs "Managing Partner" printed in the agreement). Guessing a printed title from the page would be a guess. |
 | **Firm time zone** (companies.timezone, from the browser at signup, editable in Settings). Certificate times read "UTC / local": signers in their own browser zone, the completion line, event log and signers without a zone (automatic countersigns) in the firm's | UTC stays primary for proof; the local time is what people check against. Null zone = UTC only, never a guessed zone. |
 | An automatic countersign's certificate block says "Method: Automatic countersign using saved signature" and "Authorized: <time>, IP, browser" (from when they turned it on); "Agreed to e-sign" is that authorization time, and the event log says consent was given in advance | That is when and where the signer actually agreed; the signing moment is the system acting on their instruction. Recording it as a fresh consent would misstate what happened. |
-| Every AI feature has a non-AI fallback (`AI_ENABLED=false` or no key), and the test suite runs with AI disabled | The product must work if the API is down, the key is missing or the spend limit is hit. |
-| Event-driven workflow (Inngest) with AI steps, no agents | Predictable, auditable, retryable. State lives in Postgres, not in prompts. |
+| Every AI feature has a non-AI fallback (`AI_ENABLED=false` or no key), and the test suite never calls a real model (rules only, or a mock for "E2E AI" test companies) | The product must work if the API is down, the key is missing or the spend limit is hit. |
+| Event-driven workflow with AI steps, no agents: an in-process event dispatcher plus the health-ping sweep (reminders, expiry, retries); no Inngest | Predictable, auditable, retryable. State lives in Postgres, not in prompts. |
 | Sealing runs synchronously in the final-signature request | The critical path must not depend on a queue or integration being up. |
 | All LLM calls through one wrapper with zod-validated structured outputs | Provider swappable, outputs validated, and easy to disable (rule-based fallback). |
 | Field coordinates stored normalized (0–1) relative to the page as displayed | Survives rotated pages and any rendering scale. Converted to PDF space only when stamping. |
-| Signing tokens: 32 random bytes (base64url), stored in DB, unique index; a "copy link" re-reads them | The firm needs to copy the link again later. Tokens are revoked on void, forward or completion. |
+| Signing tokens: 32 random bytes (base64url), stored in DB, unique index; a "copy link" re-reads them | The firm needs to copy the link again later. Tokens are revoked on void, on a new version or on completion. |
 | Outbox written before any send attempt; sending is best-effort with retries | Every email is visible in-app even if the provider fails. |
 | Hash both the uploaded original (DOCX or PDF) and the PDF that was signed, plus the final sealed PDF | The certificate proves which source document was signed. |
 
@@ -159,37 +156,44 @@ MIND sync on completion, onboarding checklist, pricing page (no billing), data e
 | Left out | Why |
 |---|---|
 | SMS / WhatsApp | B2B agreements are sent and signed by email. Adds cost, compliance work and phone-number collection for little gain. |
-| Native CRM connectors (HubSpot, Salesforce…) | The REST API + signed webhooks (+ Zapier on top of them) cover every CRM without one-off connectors. |
+| Native CRM connectors (HubSpot, Salesforce…) | Signed webhooks (and Zapier on top of them) let any CRM react to a File without one-off connectors. |
 | Microsoft Teams / Outlook | Time-boxed to one ecosystem (Google + Slack). The integration layer is pluggable, so these can be added later. |
-| Stripe billing | Pricing page only. Billing doesn't help get an agreement signed, and it adds risk to a 7-day build. |
+| Stripe billing | Billing doesn't help get an agreement signed, and it adds risk to a 7-day build. |
 | Identity verification beyond the email link (ID scan, KBA, SMS OTP) | Not needed for commercial B2B agreements under ESIGN/UETA. The audit trail covers it. |
 | SSO (SAML/OIDC) | Enterprise feature. Small firms use email+password. |
 | Autonomous / multi-agent design | Not predictable or auditable enough for legal documents. Code and humans decide next steps. |
 | n8n / Zapier as the core | The workflow must be in our code and DB to be reliable and multi-tenant. Zapier can sit on top of webhooks. |
 | AI memory of client conversations | Privacy risk and prompt bloat. Each AI call gets a small fixed input about one File. |
-| AI explaining contract terms directly to clients | Liability: that's legal advice. Drafts go to the owner, cite a clause, and need approval. |
+| AI explaining contract terms directly to clients | Liability: that's legal advice. |
 | In-app editing of agreement text | Agreements are drafted in Word. Editing PDFs breaks fidelity and the hash chain. Changes are requested, then a new version is uploaded. |
+| REST API with API keys | Files are created in the app or by CSV bulk send; a public API needs key management, docs and versioning, and nothing in the test path needs it. The `/api` routes that exist serve the app itself and use the login session. |
+| Reply handling (reading client replies, classifying them, AI-drafted answers) | It needs a mailbox read scope and owner approval for every message; the time went into the signing path, bulk send and integrations instead. |
+| Calendar slots and booking calls | Doesn't remove a manual step from getting an agreement signed. |
+| Google Drive archive of signed PDFs | The sealed PDF is emailed to every party and downloadable in the app; webhooks and MIND cover other systems. |
+| Inngest | The in-process dispatcher and the health-ping sweep cover retries and schedules at this size; Inngest can replace the transport later. |
+| Resend | Gmail sending covers email; adding a second provider adds config without changing the flow. |
+| Same-thread reminders and a "stalled" webhook event | Reminders are new emails on a fixed schedule; expiry already tells the owner a File stalled. |
+| Onboarding checklist, pricing page, data export, help page | Not needed to get an agreement signed. Per-client deletion exists as a database function (`purge_client_files`) and a whole account can be removed with `npm run purge:company`, but there's no in-app button. |
+| Forwarding a File to another signer | Least used, and those handoffs happen outside the tool. The `forwarded` status and `forwarded_from_id` column exist in the schema but nothing uses them. |
 | Certificate-based PDF digital signature (PAdES) | Needs a trusted CA certificate. A self-signed one shows warnings in Acrobat. SHA-256 + `/verify` + the audit certificate give tamper evidence. *Revisit if ahead.* |
 
 ## Tools and services used
 
 | Tool / service | Used for | On the critical signing path? |
 |---|---|---|
-| Next.js + TypeScript | App, signing page, REST API | Yes |
+| Next.js + TypeScript | App, signing page, the app's own API routes | Yes |
 | Render (Docker) | Hosting the single app | Yes |
-| LibreOffice headless | DOCX → PDF | Yes (DOCX only) |
+| LibreOffice headless | DOCX to PDF | Yes (DOCX only) |
+| qpdf | Removing permission-only encryption, repairing damaged PDFs | Yes |
 | Supabase Postgres | All state | Yes |
 | Supabase Storage | PDFs, logos | Yes |
 | Drizzle ORM | Schema, migrations, queries | Yes |
-| pdfjs-dist | Browser rendering; server-side text + line extraction | Yes |
+| pdfjs-dist | Browser rendering; server-side text and line extraction | Yes |
 | pdf-lib | Stamping, certificate page, append signature page | Yes |
-| zod | Input + LLM output validation | Yes |
-| Resend | Platform email fallback | No (outbox + in-app link) |
-| Inngest | Workflow steps, reminders, waits for approvals/replies | No (Phase 2+) |
-| Claude API (via `src/lib/llm`) | Field labeling, reply classification, drafts | No (rule-based fallback) |
-| Gmail API | Send as firm, read replies | No |
-| Google Calendar / Drive | Call slots + Meet; archive signed PDFs | No |
-| Slack | Owner notifications | No |
-| MIND MCP server | Knowledge-graph sync on completion | No |
-| Playwright | E2E test of the full path (desktop + mobile) | Test only |
-| Claude Code | Development assistant | — |
+| zod | Input and LLM output validation | Yes |
+| Claude API (Anthropic SDK, via `src/lib/llm`) | Review of new agreements: fields and key terms | No (rules alone if off or failing) |
+| Gmail API (plain HTTPS) | Sending every email from one Gmail account, with the firm's name as display name | No (outbox + in-app link) |
+| Slack incoming webhooks | Per-firm event notifications | No |
+| MIND MCP server (MCP TypeScript SDK) | Saving each completed File to the firm's MIND | No |
+| Playwright | E2E tests of the full path (desktop and phone) | Test only |
+| Claude Code | Development assistant | No |

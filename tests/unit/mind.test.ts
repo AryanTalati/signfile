@@ -87,3 +87,45 @@ test("the payload uses them, keeps 'Firm:', and links to this File's verificatio
   assert.ok(d.content.includes("Firm: Astra AI"));
   assert.ok(d.content.includes("Verify the signed PDF: https://app.example/verify?file=f1"));
 });
+
+test("lines are grouped under plain headings, same text, in a fixed order", () => {
+  const d = mindDocument({
+    ...ctx,
+    terms: {
+      fee: { found: true, value: "$4,500 per month" },
+      parties: { found: true, value: "Astra AI (Provider) and the Client" },
+      governing_law: { found: true, value: "State of Delaware" },
+      effective_date: { found: true, value: "Date of the last signature" },
+      renewal: { found: false, value: null },
+    },
+  });
+  assert.equal(
+    d.content,
+    [
+      "Signed agreement (via SignFile).",
+      "",
+      "Agreement",
+      "Client: Northwind Test Analytics LLC",
+      "Agreement: Consulting Services Agreement (version 2)",
+      "Firm: Astra AI",
+      "Reference: JOB-7",
+      "Parties: Astra AI (Provider) and Northwind Test Analytics LLC (Client)",
+      "Effective date: 2026-11-22 (date of the last signature)",
+      "",
+      "Key terms",
+      "Fee: $4,500 per month",
+      "Governing law: State of Delaware",
+      "",
+      "Signatures",
+      "Signed by Jordan Blake (Northwind Test Analytics LLC) on 2026-11-21",
+      "Countersigned by Test Admin (Astra AI) on 2026-11-22",
+      "Completed: 2026-11-22",
+      "",
+      "Links",
+      "File: https://app.example/files/f1",
+      "Verify the signed PDF: https://app.example/verify",
+    ].join("\n"),
+  );
+  // A section with nothing in it is left out.
+  assert.doesNotMatch(mindDocument({ ...ctx, terms: null }).content, /Key terms/);
+});

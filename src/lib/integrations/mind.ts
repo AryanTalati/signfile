@@ -20,30 +20,36 @@ export interface MindArgs {
 const TERM_LABELS: Record<string, string> = { fee: "Fee", term: "Term", effective_date: "Effective date", renewal: "Renewal", governing_law: "Governing law", parties: "Parties" };
 const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
+/** Terms that describe the agreement itself go under "Agreement"; the rest under "Key terms". */
+const AGREEMENT_TERMS = ["parties", "effective_date"];
+const KEY_TERMS = ["fee", "term", "renewal", "governing_law"];
+
 export function mindDocument(c: EventContext): MindArgs {
-  const lines = [
-    `Signed agreement (via SignFile).`,
+  const agreement = [
     `Client: ${c.file.clientLegalName}`,
     `Agreement: ${c.documentName}${c.version ? ` (version ${c.version})` : ""}`,
     `Firm: ${c.firm}`,
     ...(c.file.reference ? [`Reference: ${c.file.reference}`] : []),
   ];
+  const keyTerms: string[] = [];
   // Key terms read from the agreement, each only if it was found (never guessed).
-  for (const [k, t] of Object.entries(c.terms ?? {})) {
-    if (!t?.found || !t.value) continue;
-    const value = k === "parties" ? nameParties(t.value, c.file.clientLegalName) : k === "effective_date" ? effectiveDate(t.value, c.file.completedAt) : t.value;
-    lines.push(`${TERM_LABELS[k] ?? k}: ${value}`);
+  const found = Object.entries(c.terms ?? {}).filter(([, t]) => t?.found && t.value) as [string, { value: string }][];
+  for (const k of AGREEMENT_TERMS) {
+    const t = found.find(([key]) => key === k)?.[1];
+    if (t) agreement.push(`${TERM_LABELS[k]}: ${k === "parties" ? nameParties(t.value, c.file.clientLegalName) : effectiveDate(t.value, c.file.completedAt)}`);
   }
+  const rank = (k: string) => (KEY_TERMS.indexOf(k) + 1 || KEY_TERMS.length + 1);
+  for (const [k, t] of found.filter(([k]) => !AGREEMENT_TERMS.includes(k)).sort(([a], [b]) => rank(a) - rank(b))) keyTerms.push(`${TERM_LABELS[k] ?? k}: ${t.value}`);
   // Signers by name and role, with the date each signed. No emails or phone numbers.
-  for (const s of c.signers) lines.push(`${s.role === "firm" ? "Countersigned" : "Signed"} by ${s.name} (${s.role === "firm" ? c.firm : c.file.clientLegalName})${day(s.signedAt) ? ` on ${day(s.signedAt)}` : ""}`);
-  if (c.file.completedAt) lines.push(`Completed: ${day(c.file.completedAt)}`);
-  if (c.fileUrl) lines.push(`File: ${c.fileUrl}`);
-  if (c.verifyUrl) lines.push(`Verify the signed PDF: ${c.verifyUrl}`);
+  const signatures = c.signers.map((s) => `${s.role === "firm" ? "Countersigned" : "Signed"} by ${s.name} (${s.role === "firm" ? c.firm : c.file.clientLegalName})${day(s.signedAt) ? ` on ${day(s.signedAt)}` : ""}`);
+  if (c.file.completedAt) signatures.push(`Completed: ${day(c.file.completedAt)}`);
+  const links = [...(c.fileUrl ? [`File: ${c.fileUrl}`] : []), ...(c.verifyUrl ? [`Verify the signed PDF: ${c.verifyUrl}`] : [])];
+  const section = (heading: string, lines: string[]) => (lines.length ? [`${heading}\n${lines.join("\n")}`] : []);
   return {
     action: "create",
     type: "document",
     title: `Signed: ${c.documentName} — ${c.file.clientLegalName}`.slice(0, 200),
-    content: lines.join("\n"),
+    content: [`Signed agreement (via SignFile).`, ...section("Agreement", agreement), ...section("Key terms", keyTerms), ...section("Signatures", signatures), ...section("Links", links)].join("\n\n"),
     tags: ["signfile", "agreement"],
     source: "signfile",
   };
