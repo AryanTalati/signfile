@@ -147,6 +147,24 @@ export const userInvites = pgTable(
   (t) => [index("user_invites_company_idx").on(t.companyId)],
 );
 
+/** Forgot password: one row per emailed link. Only the token's SHA-256 is stored; 1 hour, single use. */
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: id(),
+    companyId: companyId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: ts("expires_at").notNull(),
+    usedAt: ts("used_at"),
+    requestIp: text("request_ip"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("password_reset_tokens_user_idx").on(t.userId)],
+);
+
 // ---------- Templates ----------
 
 export const templates = pgTable(
