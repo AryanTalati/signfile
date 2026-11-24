@@ -25,6 +25,9 @@ export function LoginForm({ next, demo }: { next?: string; demo: { email: string
           {state.error && <Alert>{state.error}</Alert>}
           <Field label="Email" name="email" type="email" autoComplete="email" required defaultValue={state.values?.email} />
           <Field label="Password" name="password" type="password" autoComplete="current-password" required />
+          <Link className="-mt-2 self-end text-sm font-medium text-brand hover:underline" href="/forgot-password">
+            Forgot password?
+          </Link>
           <Button type="submit" disabled={pending}>
             {pending ? "Logging in…" : "Log in"}
           </Button>
