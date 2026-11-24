@@ -55,6 +55,11 @@ test("valid reset: new password works, old one doesn't, the link works once, oth
   await requestReset(anon, email);
   const link = await linkFor(anon, email);
   await anon.goto(link);
+  // The current password is refused, and the link still works for a second try.
+  await anon.getByLabel("New password", { exact: true }).fill(OLD);
+  await anon.getByLabel("Confirm new password").fill(OLD);
+  await anon.getByRole("button", { name: "Save new password" }).click();
+  await expect(anon.getByText("Please choose a password different from your current one.")).toBeVisible();
   await anon.getByLabel("New password", { exact: true }).fill(NEW);
   await anon.getByLabel("Confirm new password").fill(NEW);
   await anon.getByRole("button", { name: "Save new password" }).click();

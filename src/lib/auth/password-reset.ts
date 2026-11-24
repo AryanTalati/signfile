@@ -13,7 +13,7 @@ import "server-only";
  *   because the Outbox page is visible to the whole company.
  */
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
-import { hashPassword, passwordProblem } from "@/lib/auth/password";
+import { hashPassword, passwordProblem, verifyPassword } from "@/lib/auth/password";
 import { db, schema } from "@/lib/db/client";
 import { gmailConfig, isTestAddress, sendGmail } from "@/lib/email/gmail";
 import { hashResetToken, looksLikeResetToken, newResetToken, RESET_TTL_MS, ResetLimiter, resetTokenState, type TokenState } from "./reset-token";
@@ -114,14 +114,29 @@ export async function checkResetToken(token: unknown): Promise<TokenState> {
   return resetTokenState(row);
 }
 
+export const SAME_PASSWORD_MESSAGE = "Please choose a password different from your current one.";
+
 export type ResetResult = { ok: true } | { ok: false; field?: "password"; error: string; state?: TokenState };
 
 export async function resetPassword(token: unknown, password: string): Promise<ResetResult> {
   const problem = passwordProblem(password);
   if (problem) return { ok: false, field: "password", error: problem };
   if (!looksLikeResetToken(token)) return { ok: false, error: "This reset link isn't valid.", state: "invalid" };
-  const passwordHash = await hashPassword(password); // slow (argon2): done before the transaction
   const hash = hashResetToken(token);
+
+  // Same as the current password? Checked against the stored hash before the link is claimed,
+  // so the link still works for a second try. An unusable link falls through to the claim below.
+  const [current] = await db
+    .select({ passwordHash: schema.users.passwordHash })
+    .from(schema.passwordResetTokens)
+    .innerJoin(schema.users, eq(schema.users.id, schema.passwordResetTokens.userId))
+    .where(and(eq(schema.passwordResetTokens.tokenHash, hash), isNull(schema.passwordResetTokens.usedAt), gt(schema.passwordResetTokens.expiresAt, new Date())))
+    .limit(1);
+  if (current?.passwordHash && (await verifyPassword(current.passwordHash, password))) {
+    return { ok: false, field: "password", error: SAME_PASSWORD_MESSAGE };
+  }
+
+  const passwordHash = await hashPassword(password); // slow (argon2): done before the transaction
 
   const done = await db.transaction(async (tx) => {
     const now = new Date();
