@@ -149,7 +149,7 @@ When a File completes, SignFile can save it as one private document in the firm'
 
 ## Running it locally
 
-Needs Docker and a Supabase project (Postgres plus Storage). An Anthropic API key and Gmail API access are optional: without a key, detection runs on rules only; without Gmail, emails are recorded in the in-app Outbox and not sent.
+Needs Node.js 22 (the version in the Dockerfile), Docker, and a Supabase project (Postgres plus Storage). An Anthropic API key and Gmail API access are optional: without a key, detection runs on rules only; without Gmail, emails are recorded in the in-app Outbox and not sent.
 
 ```bash
 git clone <repo-url> signfile && cd signfile
@@ -184,12 +184,12 @@ docker run --rm --env-file .env.local -p 10000:10000 signfile
 | `APP_URL` | Optional public base URL for links in emails; defaults to the request's host |
 | `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `GMAIL_SENDER` | Gmail API, to send email from the firm's account. Optional |
 | `BULK_ROW_DELAY_MS` | Pause between rows in a bulk send (default 400) |
+| `E2E_HOOKS` | Test only: enables the mocked-time endpoint and test receivers. Never set in production |
+| `ENABLE_SWEEP` | `1` runs the reminder and expiry sweep. Set in production only, since local and production can share a database |
 | `ANTHROPIC_API_KEY` | Claude API key. Optional; never logged |
 | `AI_ENABLED` | `false` turns the AI review off even with a key |
 | `AI_DAILY_CAP` | AI reviews per firm per 24 hours (default 20) |
 | `AI_MODEL` | Model override (default `claude-haiku-5-5`) |
-| `ENABLE_SWEEP` | `1` runs the reminder and expiry sweep. Set in production only, since local and production can share a database |
-| `E2E_HOOKS` | Test only: enables the mocked-time endpoint and test receivers. Never set in production |
 | `LLM_MOCK` | Test only: mock model for "E2E AI" test companies. Never set in production |
 | `MIND_API_KEY` | Only for one-off verification scripts; the app uses each firm's own key from Settings |
 | `MIND_MCP_URL` | Test only (with `E2E_HOOKS=1`): points MIND sync at the mock server |
@@ -201,6 +201,7 @@ Webhook, Slack and MIND settings live in each firm's Settings, not in env vars.
 ```bash
 npm run test:unit              # unit tests (node:test via tsx)
 npm run typecheck
+npm run lint
 
 # E2E (Playwright): build and start the image with email, AI and MIND mocked, then run the suite against it
 docker build -t signfile:dev .
@@ -214,7 +215,7 @@ E2E_BASE_URL=http://localhost:10000 npx playwright test --project=desktop
 
 `npm run test:e2e` runs the desktop and phone projects. Pointed at the live URL (`E2E_BASE_URL=https://signfile.onrender.com`), the config runs only the short smoke test. Test accounts use `@signfile-e2e.example` and are deleted when the run ends.
 
-Other scripts: `npm run gen:agreements` regenerates the varied test agreements in `fixtures/agreements`; `npm run purge:company -- <company-id>` deletes a company and all its Files (dry run first, then add `--confirm`).
+Other scripts: `npm run gen:agreements` regenerates the varied test agreements in `fixtures/agreements`; `npm run purge:company -- <company-id>` deletes a company and all its Files (dry run first, then add `--confirm`); `npx tsx scripts/seed-demo-files.ts` adds two completed example Files to the demo company through the real signing flow (run it against the Docker image; `--rehearse` tries it in a throwaway company first).
 
 ## Stack
 

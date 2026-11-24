@@ -1,6 +1,7 @@
 /**
- * Adds two completed, sealed example Files to the public demo company (Astra AI) so the
- * demo login doesn't open on an empty dashboard. Test data only: fictional clients, signers
+ * Adds example Files to the public demo company (Astra AI) so the demo login doesn't open on an
+ * empty dashboard: two completed and sealed, one sent and waiting on the client, one where the
+ * client requested changes. Test data only: fictional clients, signers
  * on reserved .example domains (emails are captured in the outbox, never sent), and IPs from
  * the 203.0.113.0/24 documentation range.
  *
@@ -28,7 +29,8 @@ const mode = process.argv.includes("--confirm") ? "demo" : process.argv.includes
 interface Signer { name: string; title: string; email: string; ip: string; timezone: string }
 const FIRM: Omit<Signer, "email"> = { name: "Alex Morgan", title: "Managing Director", ip: "203.0.113.10", timezone: "America/Denver" };
 
-const PLAN = [
+type Outcome = "completed" | "sent" | "changes_requested";
+const PLAN: { fixture: string; uploadAs: string; mime: string; client: string; reference: string; signer: Signer; outcome: Outcome; comment?: string }[] = [
   {
     fixture: "fixtures/agreements/docx-table-blocks.docx",
     uploadAs: "Client Services Agreement.docx",
@@ -36,6 +38,7 @@ const PLAN = [
     client: "Globex Test Industries Ltd",
     reference: "AST-2026-031",
     signer: { name: "Morgan Reyes", title: "VP Operations", email: "morgan.reyes@globex-test.example", ip: "203.0.113.24", timezone: "America/Chicago" },
+    outcome: "completed",
   },
   {
     fixture: "fixtures/agreements/pdf-multipage-initials.pdf",
@@ -44,6 +47,26 @@ const PLAN = [
     client: "Vandelay Test Imports",
     reference: "AST-2026-032",
     signer: { name: "Sam Okafor", title: "Head of Procurement", email: "sam.okafor@vandelay-test.example", ip: "203.0.113.57", timezone: "America/New_York" },
+    outcome: "completed",
+  },
+  {
+    fixture: "fixtures/agreements/docx-filled-date.docx",
+    uploadAs: "Services Agreement.docx",
+    mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    client: "Hooli Test Systems",
+    reference: "AST-2026-033",
+    signer: { name: "Riley Chen", title: "Director of IT", email: "riley.chen@hooli-test.example", ip: "203.0.113.81", timezone: "America/Los_Angeles" },
+    outcome: "sent",
+  },
+  {
+    fixture: "fixtures/agreements/pdf-drawn-lines.pdf",
+    uploadAs: "Master Services Agreement.pdf",
+    mime: "application/pdf",
+    client: "Initech Test Co.",
+    reference: "AST-2026-034",
+    signer: { name: "Jordan Patel", title: "General Counsel", email: "jordan.patel@initech-test.example", ip: "203.0.113.92", timezone: "America/Chicago" },
+    outcome: "changes_requested",
+    comment: "Please change the payment terms from net 30 to net 45 and cap travel expenses at 10% of fees.",
   },
 ];
 
@@ -101,9 +124,21 @@ async function sign(browser: Browser, link: string, who: Omit<Signer, "email">, 
   await ctx.close();
 }
 
+/** The client opens the link and asks for changes instead of signing. */
+async function requestChanges(browser: Browser, link: string, who: Signer, comment: string) {
+  const ctx = await browser.newContext({ timezoneId: who.timezone, extraHTTPHeaders: { "cf-connecting-ip": who.ip } });
+  const page = await ctx.newPage();
+  await page.goto(link.replace(/^https?:\/\/[^/]+/, BASE));
+  await page.getByRole("button", { name: "Request changes" }).click();
+  await page.getByRole("dialog").getByRole("textbox").fill(comment);
+  await page.getByRole("dialog").getByRole("button", { name: "Send request" }).click();
+  await page.getByTestId("sign-responded-changes_requested").waitFor();
+  await ctx.close();
+}
+
 async function main() {
   console.log(`Target: ${mode === "demo" ? "demo company Astra AI" : mode === "rehearse" ? "a new throwaway E2E company" : "(plan only)"} via ${BASE}\n`);
-  for (const p of PLAN) console.log(`- ${p.client} (${p.reference}): "${p.uploadAs}" from ${p.fixture}; client signer ${p.signer.name}, ${p.signer.title}, ${p.signer.email}; countersigned by ${FIRM.name}`);
+  for (const p of PLAN) console.log(`- ${p.client} (${p.reference}), ${p.outcome}: "${p.uploadAs}" from ${p.fixture}; client signer ${p.signer.name}, ${p.signer.title}, ${p.signer.email}`);
   if (mode === "plan") return console.log("\nNothing written. Use --rehearse or --confirm.");
 
   const browser = await chromium.launch();
@@ -132,6 +167,18 @@ async function main() {
       await page.waitForURL(/\/files\/[0-9a-f-]{36}\?sent=1/);
       const fileUrl = page.url().replace("?sent=1", "");
       const clientLink = await page.getByTestId("signing-link").first().inputValue();
+
+      if (p.outcome === "sent") {
+        console.log(`done ${p.client}: sent, waiting on the client -> ${fileUrl.replace(BASE, "")}`);
+        continue;
+      }
+      if (p.outcome === "changes_requested") {
+        await requestChanges(browser, clientLink, p.signer, p.comment!);
+        await page.goto(fileUrl);
+        await page.getByTestId("file-response").waitFor();
+        console.log(`done ${p.client}: ${await page.getByTestId("file-status").innerText()} -> ${fileUrl.replace(BASE, "")}`);
+        continue;
+      }
 
       await sign(browser, clientLink, p.signer, p.client);
       await page.goto(fileUrl);

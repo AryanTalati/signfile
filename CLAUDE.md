@@ -8,7 +8,7 @@ A take-home for **Astra AI** (small AI consulting / IT services firm, maker of M
 - Anthony (founder) will test it by getting the **MIND client agreement**, which we have never seen, signed through the live URL. **The system must work for any unseen PDF or DOCX.**
 - Graded on: **works** (unseen agreement signed end to end on the live URL), **complete** (close to a product a firm could buy and run today), **decisions hold up** (included/left out and why).
 - Deliverables: public GitHub repo, live Render URL, written description, included and left-out features.
-- **Deadline: Wed Nov 25, 2026, 12:40 PM MST (19:40 UTC). No commits after that.** Remind the user as it approaches (from Nov 23 on, at the start of each session).
+- **Deadline: Wed Nov 25, 2026, 12:40 PM MST (19:40 UTC). No commits after that.**
 - Test data only. Never real personal info.
 
 ## Vocabulary
@@ -100,18 +100,5 @@ SMS/WhatsApp, native CRM connectors, Teams/Outlook, Stripe billing, identity ver
 - Client IP: only via `getClientIp()` / `requestMeta()` (Cloudflare's `CF-Connecting-IP` on Render). Never read `X-Forwarded-For` directly: its first entry is client-controlled.
 - Unit tests: `npm run test:unit` (node:test via tsx).
 - Small, frequent commits with clear messages.
-- Repo is **private until submission**. The "Submission checklist" at the end of this file (make repo public, last commit before the deadline, etc.) must be done on Nov 25. Remind the user.
 - README starts with "Test it in 3 minutes" + demo login. Setup steps include setting a monthly spend limit in the Anthropic console.
 - When unsure: make a reasonable decision, write it in `DECISIONS.md`, tell the user.
-
-## Submission checklist (Wed Nov 25, 2026, before 12:40 PM MST)
-
-- [ ] Final commit pushed **before 12:40 PM MST** (19:40 UTC). No commits after.
-- [ ] **Make the GitHub repo public** (Settings → General → Danger Zone → Change visibility).
-- [ ] Live Render URL loads, `/api/health` returns ok, and the uptime pinger is running. If the site hangs while waking, use Render → Manual Deploy → **Restart service**.
-- [ ] Render → Environment has `ENABLE_SWEEP=1` (reminders and expiry run only there) and does **not** have `E2E_HOOKS`. Check: `curl -X POST https://signfile.onrender.com/api/test/automations` returns 404.
-- [ ] Full test path passes on the live URL with a fresh, unseen agreement (desktop + phone).
-- [ ] Demo login in the README works on the live URL.
-- [ ] Anthropic monthly spend limit set.
-- [ ] README "Test it in 3 minutes", DECISIONS.md and the written description are final.
-- [ ] No real personal data in the repo or the live database. To remove an account, find its company id and run `npm run purge:company -- <company-id>` (dry run), then add `--confirm`.
