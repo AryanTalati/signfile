@@ -62,6 +62,17 @@ test("events reach the webhook and Slack: signed bodies, UTC times, signed PDF l
   await slack.getByRole("button", { name: "Save Slack" }).click();
   await expect(slack.getByText("Saved")).toBeVisible();
 
+  // Write-only: after a reload the page carries only "saved" and a masked hint, never the URL itself.
+  await page.goto("/settings");
+  const field = slack.getByLabel("Slack incoming-webhook URL");
+  await expect(field).toHaveValue("");
+  await expect(field).toHaveAttribute("placeholder", "URL saved. Leave blank to keep it");
+  await expect(slack.getByTestId("slack-saved-hint")).toHaveText(`Current: ${new URL(base).host}/…lack`);
+  expect(await page.content()).not.toContain(`${base}/slack`);
+  // Saving with the field blank keeps the saved URL (the Slack posts below still arrive at /slack).
+  await slack.getByRole("button", { name: "Save Slack" }).click();
+  await expect(slack.getByText("Saved", { exact: true })).toBeVisible();
+
   const { fileUrl, clientLink } = await sendFile(page);
   await signViaLink(await (await browser.newContext()).newPage(), clientLink);
   await page.goto(fileUrl);

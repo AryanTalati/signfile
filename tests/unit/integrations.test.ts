@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { test } from "node:test";
-import { afterAttempt, checkTargetUrl, type EventContext, MAX_ATTEMPTS, retryDelayMs, signBody, slackText, webhookPayload } from "../../src/lib/integrations/core";
+import { afterAttempt, checkTargetUrl, type EventContext, MAX_ATTEMPTS, maskSecretUrl, retryDelayMs, signBody, slackText, webhookPayload } from "../../src/lib/integrations/core";
 import { createDispatcher, type FileEvent } from "../../src/lib/integrations/dispatch";
 
 const tick = () => new Promise((r) => setTimeout(r, 10));
@@ -93,4 +93,14 @@ test("payload: UTC timestamps; signed PDF link only on file.completed", () => {
   assert.equal(p.signers[0].signedAt, "2026-11-21T18:00:00.000Z");
   assert.ok(!("signedPdfUrl" in p));
   assert.equal(webhookPayload({ ...ctx, type: "file.completed" }, "d2").signedPdfUrl, "https://app.example/api/sign/tok/download");
+});
+
+test("a saved Slack URL is only ever shown masked: host and last 4 characters", () => {
+  const url = "https://hooks.slack.com/services/T0AAAAAAA/B0BBBBBBB/abcdEFGHijklMNOPqrst1234";
+  const masked = maskSecretUrl(url)!;
+  assert.equal(masked, "hooks.slack.com/…1234");
+  assert.ok(!masked.includes("T0AAAAAAA") && !masked.includes("abcdEFGH"));
+  assert.equal(maskSecretUrl("https://hooks.slack.com/services/x/y/zzzz9876/"), "hooks.slack.com/…9876");
+  assert.equal(maskSecretUrl(null), null);
+  assert.equal(maskSecretUrl(""), null);
 });

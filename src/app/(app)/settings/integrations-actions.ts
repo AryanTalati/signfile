@@ -43,11 +43,18 @@ export async function saveSlackAction(_: IntegrationState, fd: FormData): Promis
     revalidatePath("/settings");
     return { ok: true };
   }
-  const url = checkTargetUrl(String(fd.get("url") ?? ""), "slack", allowLocal());
-  if ("error" in url) return { error: url.error };
+  // Write-only like the MIND key: the page never gets the saved URL back, so blank keeps it.
+  const raw = String(fd.get("url") ?? "").trim();
+  const [cur] = await db.select({ url: schema.companies.slackWebhookUrl }).from(schema.companies).where(eq(schema.companies.id, auth.company.id));
+  if (!raw && !cur?.url) return { error: "Paste your Slack incoming-webhook URL." };
+  const url = raw ? checkTargetUrl(raw, "slack", allowLocal()) : null;
+  if (url && "error" in url) return { error: url.error };
   const events = eventsFrom(fd);
   if (!events.length) return { error: "Pick at least one event to post." };
-  await db.update(schema.companies).set({ slackWebhookUrl: url.url, slackEvents: events }).where(eq(schema.companies.id, auth.company.id));
+  await db
+    .update(schema.companies)
+    .set({ slackEvents: events, ...(url ? { slackWebhookUrl: url.url } : {}) })
+    .where(eq(schema.companies.id, auth.company.id));
   revalidatePath("/settings");
   return { ok: true };
 }

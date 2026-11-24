@@ -25,6 +25,22 @@ export function afterAttempt(attempts: number, ok: boolean, final = false): "del
 const PRIVATE_HOST = /^(localhost|.*\.local|.*\.internal|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.|\[?::1\]?$|\[?f[cd][0-9a-f]{2}:)/i;
 
 /**
+ * A saved secret URL (a Slack incoming webhook) as the page may show it: host plus the last 4
+ * characters, e.g. "hooks.slack.com/…a1B2". The full URL never goes back to the browser.
+ */
+export function maskSecretUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let host = "saved URL";
+  try {
+    host = new URL(raw).host;
+  } catch {
+    /* keep the generic label */
+  }
+  const tail = raw.replace(/\/+$/, "").slice(-4);
+  return `${host}/…${tail}`;
+}
+
+/**
  * A URL we're willing to POST to: https, and not a private/loopback host (so a firm can't
  * point our server at internal services). `allowLocal` is for the E2E test receiver only.
  */

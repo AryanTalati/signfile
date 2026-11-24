@@ -73,14 +73,23 @@ export function WebhookForm(p: { url: string | null; hasSecret: boolean; events:
   );
 }
 
-export function SlackForm(p: { url: string | null; events: string[] }) {
+/** Write-only: the saved URL is a secret (anyone with it can post to the channel), so only a masked hint comes back. */
+export function SlackForm(p: { saved: boolean; hint: string | null; events: string[] }) {
   const [state, action, pending] = useActionState<IntegrationState, FormData>(saveSlackAction, {});
   return (
     <form action={action} className="mt-4 flex flex-col gap-3" data-testid="slack-form">
-      <Field label="Slack incoming-webhook URL" id="slack-url" name="url" type="url" autoComplete="off" defaultValue={p.url ?? ""} placeholder="https://hooks.slack.com/services/…" hint="In Slack: Apps → Incoming Webhooks → Add to a channel, then paste the URL here." />
+      <Field
+        label="Slack incoming-webhook URL"
+        id="slack-url"
+        name="url"
+        type="url"
+        autoComplete="off"
+        placeholder={p.saved ? "URL saved. Leave blank to keep it" : "https://hooks.slack.com/services/…"}
+        hint={p.saved && p.hint ? <span data-testid="slack-saved-hint">Current: {p.hint}</span> : "In Slack: Apps → Incoming Webhooks → Add to a channel, then paste the URL here."}
+      />
       <EventBoxes selected={p.events} />
       <Status state={state} pending={pending} label="Save Slack" />
-      {p.url && (
+      {p.saved && (
         <button type="submit" name="intent" value="off" className="self-start text-sm text-red-700 underline">
           Turn off Slack
         </button>

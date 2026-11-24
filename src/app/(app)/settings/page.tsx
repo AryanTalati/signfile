@@ -9,6 +9,7 @@ import { SignatureSettings } from "./signature-settings";
 import { RemindersForm } from "./reminders-form";
 import { DeliveryLog, MindForm, SlackForm, WebhookForm } from "./integrations";
 import { listDeliveries } from "@/lib/integrations/deliveries";
+import { maskSecretUrl } from "@/lib/integrations/core";
 import { db, schema } from "@/lib/db/client";
 import { eq, sql } from "drizzle-orm";
 
@@ -30,7 +31,7 @@ export default async function SettingsPage() {
         webhookUrl: schema.companies.webhookUrl,
         hasSecret: sql<boolean>`${schema.companies.webhookSecret} is not null`,
         webhookEvents: schema.companies.webhookEvents,
-        slackUrl: schema.companies.slackWebhookUrl,
+        slackUrl: schema.companies.slackWebhookUrl, // masked below; never passed to the client
         slackEvents: schema.companies.slackEvents,
         hasMindKey: sql<boolean>`${schema.companies.mindApiKey} is not null`,
         mindEnabled: schema.companies.mindEnabled,
@@ -72,7 +73,7 @@ export default async function SettingsPage() {
           <Card className="p-5" data-testid="slack-card">
             <h2 className="font-semibold">Slack</h2>
             <p className="mt-1 text-sm text-muted">Off until you save a URL. One short message per event in the channel you chose in Slack.</p>
-            <SlackForm url={company.slackUrl} events={company.slackEvents ?? []} />
+            <SlackForm saved={!!company.slackUrl} hint={maskSecretUrl(company.slackUrl)} events={company.slackEvents ?? []} />
           </Card>
           <Card className="p-5" data-testid="mind-card">
             <h2 className="font-semibold">MIND</h2>
