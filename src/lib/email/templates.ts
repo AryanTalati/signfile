@@ -31,9 +31,9 @@ export function signRequestEmail(o: { brand: Brand; recipientName: string; docum
 ${o.revised?.note ? `<p><strong>What changed:</strong> ${esc(o.revised.note).replace(/\n/g, "<br>")}</p>` : ""}
 ${o.revised?.signAgain ? `<p><strong>You signed the earlier version. That signature doesn't carry over: please review and sign this version again.</strong> Your earlier link no longer works.</p>` : o.revised ? "<p>Earlier links no longer work; use the button below.</p>" : ""}
 ${button(o.brand, o.link, "Review and sign")}
-<p style="font-size:13px;color:#6b6b66">If you're not the right person to sign, open the link and use <em>Forward to someone else</em>. You can also request changes from the same page. This link expires on ${exp}.</p>`,
+<p style="font-size:13px;color:#6b6b66">You can also request changes from the same page. This link expires on ${exp}.</p>`,
   );
-  const text = `Hi ${o.recipientName.split(" ")[0]},\n\n${o.senderName} at ${o.brand.name} sent you ${o.revised ? `a revised version (version ${o.revised.version}) of ` : ""}"${o.documentName}" to sign for ${o.clientLegalName}.${o.revised?.note ? `\n\nWhat changed: ${o.revised.note}` : ""}${o.revised?.signAgain ? "\n\nYou signed the earlier version; please sign this version again." : ""}\n\nReview and sign: ${o.link}\n\nNot the right person? Open the link and choose "Forward to someone else". This link expires on ${exp}.`;
+  const text = `Hi ${o.recipientName.split(" ")[0]},\n\n${o.senderName} at ${o.brand.name} sent you ${o.revised ? `a revised version (version ${o.revised.version}) of ` : ""}"${o.documentName}" to sign for ${o.clientLegalName}.${o.revised?.note ? `\n\nWhat changed: ${o.revised.note}` : ""}${o.revised?.signAgain ? "\n\nYou signed the earlier version; please sign this version again." : ""}\n\nReview and sign: ${o.link}\n\nYou can also request changes from the same page. This link expires on ${exp}.`;
   return { subject, html, text };
 }
 
