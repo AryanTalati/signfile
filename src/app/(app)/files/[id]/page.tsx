@@ -14,6 +14,8 @@ import { requireAuth } from "@/lib/auth/session";
 import { getFile, signLink } from "@/lib/files/service";
 import { KeyTerms } from "@/components/files/key-terms";
 import { appUrl } from "@/lib/http/app-url";
+import { db, schema } from "@/lib/db/client";
+import { eq } from "drizzle-orm";
 
 export const metadata: Metadata = { title: "File · signfile" };
 
@@ -36,7 +38,11 @@ export default async function FilePage({ params, searchParams }: { params: Promi
   const { id } = await params;
   const { sent: sentParam, signNowError, revised } = await searchParams;
   const sent = sentParam || revised;
-  const data = await getFile(auth, id);
+  const [data, [company]] = await Promise.all([
+    getFile(auth, id),
+    // Dates inside timeline labels use the firm's zone (Settings); the certificate keeps UTC.
+    db.select({ timezone: schema.companies.timezone }).from(schema.companies).where(eq(schema.companies.id, auth.company.id)),
+  ]);
   if (!data) notFound();
   const { file, events, emails, templateName, documents } = data;
   // Signers of the current version (earlier versions' signers are history, shown in the timeline).
@@ -174,7 +180,7 @@ export default async function FilePage({ params, searchParams }: { params: Promi
             {events.map((e) => (
               <li key={e.id} className="px-4 py-2.5 text-sm">
                 <span className="font-medium" data-testid="timeline-label">
-                  {eventLabel(e)}
+                  {eventLabel(e, company?.timezone)}
                 </span>
                 <span className="block text-xs text-muted">{fmt(e.createdAt)}</span>
               </li>

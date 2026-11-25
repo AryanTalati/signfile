@@ -2,6 +2,10 @@
  * Plain-English labels for every audit event type, used by the File timeline and the
  * certificate. Every type the app emits must be listed (tests/unit/event-labels.test.ts
  * fails otherwise); unknown types fall back to a readable form, never the raw name.
+ *
+ * `tz` only affects the dates written inside a few labels. Without it they are UTC calendar
+ * days: the certificate calls eventLabel without a zone, so its wording never changes. The File
+ * timeline passes the firm's zone.
  */
 import { shortDate } from "@/lib/time";
 
@@ -14,7 +18,7 @@ export interface EventLike {
 const who = (e: EventLike) => e.actorLabel || "Someone";
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 
-export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
+export const EVENT_LABELS: Record<string, (e: EventLike, tz?: string | null) => string> = {
   "company.created": (e) => `Company created by ${who(e)}`,
   "file.created": (e) => {
     const n = Number(e.data?.aiConfirmedFields ?? 0);
@@ -25,15 +29,15 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
     return to?.name ? `Sent to ${to.name} for signature` : "Sent for signature";
   },
   "recipient.viewed": (e) => `Viewed by ${who(e)}`,
-  "recipient.consented": (e) =>
+  "recipient.consented": (e, tz) =>
     e.data?.inAdvance
-      ? `${who(e)} agreed to sign electronically in advance, by authorizing automatic countersign${str(e.data?.authorizedAt) ? ` on ${shortDate(str(e.data?.authorizedAt))}` : ""}`
+      ? `${who(e)} agreed to sign electronically in advance, by authorizing automatic countersign${str(e.data?.authorizedAt) ? ` on ${shortDate(str(e.data?.authorizedAt), tz)}` : ""}`
       : `${who(e)} agreed to sign electronically`,
   "recipient.signed": (e) => `Signed by ${who(e)}`,
   "recipient.details_changed": (e) =>
     `${str(e.data?.field) || "Detail"} changed from ${str(e.data?.from) || "(blank)"} to ${str(e.data?.to) || "(blank)"} by ${who(e)}`,
   "recipient.signed_with_saved_signature": (e) => `${who(e)} used their saved signature`,
-  "recipient.auto_countersigned": (e) => `Countersigned automatically with ${who(e)}'s saved signature${str(e.data?.authorizedAt) ? ` (authorized ${shortDate(str(e.data?.authorizedAt))})` : ""}`,
+  "recipient.auto_countersigned": (e, tz) => `Countersigned automatically with ${who(e)}'s saved signature${str(e.data?.authorizedAt) ? ` (authorized ${shortDate(str(e.data?.authorizedAt), tz)})` : ""}`,
   "recipient.auto_countersign_failed": (e) => `Automatic countersign didn't apply${str(e.data?.reason) ? ` (${str(e.data?.reason)})` : ""}; ${who(e)} was asked to countersign`,
   "recipient.activated": (e) => (str(e.data?.name) ? `${str(e.data?.name)}'s turn to sign` : "Next signer's turn"),
   "recipient.declined": (e) => `Declined by ${who(e)}${str(e.data?.reason) ? `: ${str(e.data?.reason)}` : ""}`,
@@ -61,9 +65,10 @@ export const EVENT_LABELS: Record<string, (e: EventLike) => string> = {
   "user.auto_countersign_disabled": (e) => `${who(e)} turned off automatic countersigning`,
 };
 
-export function eventLabel(e: EventLike): string {
+/** `tz` (optional, IANA): the zone for dates inside labels; omitted = UTC, as on the certificate. */
+export function eventLabel(e: EventLike, tz?: string | null): string {
   const f = EVENT_LABELS[e.type];
-  if (f) return f(e);
+  if (f) return f(e, tz);
   // Fallback: never show a raw dotted name.
   const words = e.type.split(".").pop()!.replace(/_/g, " ");
   return `${words.charAt(0).toUpperCase()}${words.slice(1)}${e.actorLabel ? ` · ${e.actorLabel}` : ""}`;
