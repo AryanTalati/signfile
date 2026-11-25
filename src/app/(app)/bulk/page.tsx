@@ -18,7 +18,9 @@ export default async function BulkHistoryPage() {
         <p className="mt-1 text-sm text-muted">Every CSV run, with its result. Start one from a template: open it and choose Bulk send from CSV.</p>
       </div>
       {batches.length === 0 ? (
-        <Card className="p-10 text-center text-sm text-muted">No bulk sends yet.</Card>
+        <Card className="p-10 text-center text-sm text-muted" data-testid="bulk-empty">
+          Send the same agreement to many clients at once. Upload a CSV with one row per client, and SignFile creates and sends a File to each. Start from a template: open it and choose Bulk send from CSV. Past runs and their results show here.
+        </Card>
       ) : (
         <Card className="divide-y divide-border">
           {batches.map((b) => (

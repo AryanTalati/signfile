@@ -28,6 +28,15 @@ You can also click **Log in to the demo** on the login page, or create your own 
 
 Every email the app sends is also in the in-app **Outbox**, so you never need a real inbox. To try signing as a client from your inbox, send a File to an address you can open and check spam (see Known limits).
 
+Integrations (webhook, Slack, MIND) are pre-configured on the demo company: after signing a File, see them fire in **Settings → Recent deliveries**.
+
+## Try this
+
+- Upload your own agreement (any PDF or Word file) and watch it detect the signature fields.
+- Sign a File end to end, download the sealed PDF, and check it at `/verify`. Change one byte and verify again: it fails.
+- Open **Settings → Recent deliveries** to see webhook, Slack and MIND fire from one signing.
+- Upload the sample CSV (`fixtures/bulk/clients-sample.csv`) in Bulk send and watch it flag a bad row and a duplicate.
+
 > **Use test data only.** This is a demo deployment. Don't enter real names, real email addresses, or real client agreements, whether at signup, as signers, or in uploaded documents. Use made-up names and addresses on a reserved test domain such as `@example.com`. Emails to reserved test domains are captured in the Outbox and never sent.
 
 ## What it does
@@ -136,6 +145,9 @@ Return any 2xx to acknowledge. Anything else, or no answer within 10 seconds, is
 ### Slack
 
 Paste a Slack incoming webhook URL in Settings and pick the events. Each event is one short line in the channel.
+
+![SignFile posts each event to the firm's Slack channel.](docs/slack-notifications.png)
+*SignFile posts each event to the firm's Slack channel.*
 
 ### MIND sync
 

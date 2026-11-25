@@ -33,14 +33,24 @@ type Save = { state: "saved" | "dirty" | "saving" | "error"; message?: string };
 const uid = () => `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
+type EditorData = { name: string; countersign: boolean; firmFirst: boolean; fields: FieldDef[]; parked: FieldDef[] };
+/**
+ * Saves sent while leaving the editor (Back, a header link), by template id. Reopening the same
+ * template in this tab right away starts from that data (the server may not have it yet) and
+ * waits for that save before its own, so it never shows or saves over older fields.
+ */
+const leavingSaves = new Map<string, { data: EditorData; done: Promise<boolean> }>();
+
 export function FieldEditor(props: EditorProps) {
   const router = useRouter();
-  const [name, setName] = useState(props.initialName);
-  const [fields, setFields] = useState<FieldDef[]>(props.initialFields);
-  const [countersign, setCountersign] = useState(props.initialCountersign);
-  const [parked, setParked] = useState<FieldDef[]>(props.initialParked ?? []);
+  // A save from leaving this template a moment ago may still be on its way: start from its data.
+  const [resume] = useState(() => leavingSaves.get(props.templateId) ?? null);
+  const [name, setName] = useState(resume?.data.name ?? props.initialName);
+  const [fields, setFields] = useState<FieldDef[]>(resume?.data.fields ?? props.initialFields);
+  const [countersign, setCountersign] = useState(resume?.data.countersign ?? props.initialCountersign);
+  const [parked, setParked] = useState<FieldDef[]>(resume?.data.parked ?? props.initialParked ?? []);
   const [firmBusy, setFirmBusy] = useState(false);
-  const [firmFirst, setFirmFirst] = useState(props.initialFirmFirst);
+  const [firmFirst, setFirmFirst] = useState(resume?.data.firmFirst ?? props.initialFirmFirst);
   const [selected, setSelected] = useState<string | null>(null);
   const [armed, setArmed] = useState<FieldType | null>(null);
   const [lastRole, setLastRole] = useState<"client" | "firm">("client");
@@ -95,6 +105,7 @@ export function FieldEditor(props: EditorProps) {
       return inFlight.current;
     }
     const run = (async () => {
+      await leavingSaves.get(props.templateId)?.done; // never overtake the save sent on the way out
       do {
         again.current = false;
         const sent = rev.current;
@@ -136,6 +147,18 @@ export function FieldEditor(props: EditorProps) {
     return () => clearTimeout(t);
   }, [fields, name, countersign, firmFirst, parked, saveNow]);
 
+  useEffect(() => {
+    if (!resume) return;
+    void resume.done.then((ok) => {
+      if (ok) {
+        const d = resume.data;
+        confirmed.current = snapshot(d.name, d.countersign, d.firmFirst, d.fields, d.parked);
+        setSave((s) => (s.state === "saving" ? s : { state: "saved" }));
+      } else void saveNow();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, []);
+
   const unsaved = snapshot(name, countersign, firmFirst, fields, parked) !== confirmed.current;
   const shownSave: Save = save.state === "error" || save.state === "saving" ? save : { state: unsaved ? "dirty" : "saved" };
   const problems = useMemo(() => validateFields(fields, rolesFor(countersign, firmFirst), props.pages.length), [fields, countersign, firmFirst, props.pages.length]);
@@ -147,7 +170,16 @@ export function FieldEditor(props: EditorProps) {
       const l = latest.current;
       if (appendingRef.current || snapshot(l.name, l.countersign, l.firmFirst, l.fields, l.parked) === confirmed.current) return;
       const body = JSON.stringify({ pdfSha256: props.pdfSha256, name: l.name.trim() || "Untitled agreement", countersign: l.countersign, firmFirst: l.countersign && l.firmFirst, fields: l.fields, parkedFields: l.parked });
-      void fetch(`/api/templates/${props.templateId}`, { method: "PUT", headers: { "content-type": "application/json" }, body, keepalive: body.length < 60_000 }).catch(() => undefined);
+      // keepalive: delivered even if the tab closes. Recorded so a reopened editor can wait for it.
+      const done = fetch(`/api/templates/${props.templateId}`, { method: "PUT", headers: { "content-type": "application/json" }, body, keepalive: body.length < 60_000 }).then(
+        (r) => r.ok,
+        () => false,
+      );
+      const entry = { data: { name: l.name, countersign: l.countersign, firmFirst: l.firmFirst, fields: l.fields, parked: l.parked }, done };
+      leavingSaves.set(props.templateId, entry);
+      void done.finally(() => {
+        if (leavingSaves.get(props.templateId) === entry) leavingSaves.delete(props.templateId);
+      });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once, on unmount
     [],
