@@ -9,6 +9,7 @@ const nav = [
   { href: "/bulk", label: "Bulk sends" },
   { href: "/outbox", label: "Outbox" },
   { href: "/settings", label: "Settings" },
+  { href: "/verify", label: "Verify" }, // the public /verify page, reachable from inside the app
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
