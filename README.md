@@ -28,13 +28,13 @@ You can also click **Log in to the demo** on the login page, or create your own 
 
 Every email the app sends is also in the in-app **Outbox**, so you never need a real inbox. To try signing as a client from your inbox, send a File to an address you can open and check spam (see Known limits).
 
-Integrations (webhook, Slack, MIND) are pre-configured on the demo company: after signing a File, see them fire in **Settings → Recent deliveries**.
+The webhook and Slack integrations are pre-configured on the demo company: after signing a File, see them fire in **Settings → Recent deliveries**. MIND isn't pre-configured; see [MIND sync](#mind-sync) to test it with your own key.
 
 ## Try this
 
 - Upload your own agreement (any PDF or Word file) and watch it detect the signature fields.
 - Sign a File end to end, download the sealed PDF, and check it at `/verify`. Change one byte and verify again: it fails.
-- Open **Settings → Recent deliveries** to see webhook, Slack and MIND fire from one signing.
+- Open **Settings → Recent deliveries** to see the webhook and Slack fire from one signing.
 - Upload the sample CSV (`fixtures/bulk/clients-sample.csv`) in Bulk send and watch it flag a bad row and a duplicate.
 
 > **Use test data only.** This is a demo deployment. Don't enter real names, real email addresses, or real client agreements, whether at signup, as signers, or in uploaded documents. Use made-up names and addresses on a reserved test domain such as `@example.com`. Emails to reserved test domains are captured in the Outbox and never sent.
@@ -152,6 +152,8 @@ Paste a Slack incoming webhook URL in Settings and pick the events. Each event i
 ### MIND sync
 
 When a File completes, SignFile can save it as one private document in the firm's MIND (off by default; each firm adds its own MIND API key in **Settings**). The document carries the client, agreement version, key terms, signers and dates, and a link to `/verify`. It never sends signer emails or phone numbers. Why it works this way: see `DECISIONS.md`.
+
+To test MIND, paste your own MIND API key in **Settings → MIND**, turn it on, then sign a File. The completed document appears in your MIND graph.
 
 ![A signed File saved as a private document in MIND.](docs/mind-document.png)
 *A signed File saved as a private document in MIND.*
